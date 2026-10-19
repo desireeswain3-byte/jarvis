@@ -36,6 +36,12 @@ TOOL_SCHEMAS = [
     {"name": "autopilot",
      "description": "Switch the practice-account autopilot on or off, or say what it is doing. It trades ONLY the practice account with fake money, never a live account, and only with strict limits (small size, daily buy limit, daily loss stop, profit guard, sell before the close). Use for 'turn on autopilot', 'let him trade the practice account', 'autopilot off', 'what is autopilot doing'. Never say it will make money.",
      "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off", "status"]}}, "required": ["action"]}},
+    {"name": "check_messages",
+     "description": "Read her most recent Apple Messages (texts and iMessages) on her Mac. Read only: you can never send, reply or delete. Optional contact filter by phone number, email or name fragment. Use for 'check my messages', 'did anyone text me', 'what did Mom say'. If the Mac has not allowed access, give her the steps from the result. Do not quote private messages back at length, summarise.",
+     "input_schema": {"type": "object", "properties": {"contact": {"type": "string"}, "limit": {"type": "integer"}}}},
+    {"name": "read_notes",
+     "description": "Read her Apple Notes on her Mac, newest first, optionally only notes that mention a word. Read only: you never change or delete a note. Use for 'check my notes', 'what did I write about X', 'read my memo'. If the Mac has not allowed access, give her the steps from the result.",
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}}}},
     {"name": "market_today",
      "description": "Where the stock market is right now: the main index funds (SPY, QQQ, DIA, IWM) and the biggest movers on the watchlist, from free data on her broker keys. Describes, never predicts. Use for 'how is the market today', 'what is moving'.",
      "input_schema": {"type": "object", "properties": {}}},
@@ -426,6 +432,30 @@ class Toolbox:
         else:
             msg = "Autopilot is %s on the practice account. Buys today: %d%s." % ("on" if st["on"] else "off", st["buys_today"], (", holding " + ", ".join(st["holding"])) if st["holding"] else "")
         return {"say": msg, "card": None, "facts": msg}
+
+    def t_check_messages(self, contact="", limit=8):
+        import apple
+        try:
+            msgs = apple.recent_messages(limit, contact)
+        except apple.AppleError as e:
+            return {"say": str(e), "card": None, "facts": str(e)}
+        if not msgs:
+            m = "I found no recent messages%s." % ((" from " + contact) if contact else "")
+            return {"say": m, "card": None, "facts": m}
+        lines = ["%s, %s: %s" % (m["when"], m["from"], m["text"]) for m in msgs]
+        return {"say": "Here are your latest %d messages." % len(msgs), "card": None, "facts": "Latest messages, newest first (read only, private):\n" + "\n".join(lines)}
+
+    def t_read_notes(self, query="", limit=5):
+        import apple
+        try:
+            notes = apple.recent_notes(query, limit)
+        except apple.AppleError as e:
+            return {"say": str(e), "card": None, "facts": str(e)}
+        if not notes:
+            m = "I found no notes%s." % ((" mentioning " + query) if query else "")
+            return {"say": m, "card": None, "facts": m}
+        return {"say": "I found %d note%s." % (len(notes), "" if len(notes) == 1 else "s"), "card": None,
+                "facts": "Apple Notes (read only, private):\n" + "\n".join("- %s: %s" % (n["title"], n["text"]) for n in notes)}
 
     def t_market_today(self):
         import watch as _w

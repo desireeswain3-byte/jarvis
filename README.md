@@ -119,3 +119,6 @@ In Chrome, the Mic button now uses Chrome's own speech recognition, so listening
 2. Start JARVIS as usual.
 3. Double-click `overlay/start_overlay.command` (right-click, Open the first time). The first run downloads Electron.
 JARVIS then floats above everything. Clicks pass through everywhere except on the orb, and you can drag him. Say "move to the top left" or "go to the bottom right" and he glides there. The Mic and voice stay in the Chrome tab, so keep that tab open.
+
+---
+Copyright (c) 2026 Desiree Swain. All rights reserved. See LICENSE. Do not copy or reuse without written permission.

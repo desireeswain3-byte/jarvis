@@ -85,7 +85,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 32;
+const UI_BUILD = 33;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -926,6 +926,22 @@ $("#b-hands").addEventListener("click", async () => {
     applyRate(); show();
     try { localStorage.setItem("jarvis.pitch2", String(tonePitch)); } catch (e) { /* ignore */ }
   });
+})();
+
+/* A cloud voice (Fish Audio) already sounds right, so once, put speed and brightness at neutral so it matches the website. */
+(function () {
+  const t = setInterval(() => {
+    if (!status) return;
+    clearInterval(t);
+    if (!status.voice || status.voice.engine !== "fish") return;
+    let done = false;
+    try { done = localStorage.getItem("jarvis.fishdefaults") === "1"; } catch (e) { /* ignore */ }
+    if (done) return;
+    const r = $("#rate"), p = $("#pitch");
+    if (r) { r.value = 1; r.dispatchEvent(new Event("input")); }
+    if (p) { p.value = 1; p.dispatchEvent(new Event("input")); }
+    try { localStorage.setItem("jarvis.fishdefaults", "1"); } catch (e) { /* ignore */ }
+  }, 200);
 })();
 
 /* ---------- greets her on his own, and tells her about trading changes without being asked ---------- */

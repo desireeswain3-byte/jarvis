@@ -59,6 +59,9 @@ def build_system(wiring=None):
     claude_md = ROOT / "CLAUDE.md"
     if claude_md.exists():
         parts.append("## Who you are working for (CLAUDE.md)\n" + claude_md.read_text(encoding="utf-8"))
+    me_md = ROOT / "ME.md"  # her private details; ignored by git, never uploaded
+    if me_md.exists():
+        parts.append("## About her (ME.md, private)\n" + me_md.read_text(encoding="utf-8"))
     mem = memory.listing()[:30]
     if mem:
         parts.append("## Remembered facts (memory/)\n" + "\n".join("- %s: %s" % (m["file"], m["text"]) for m in mem))

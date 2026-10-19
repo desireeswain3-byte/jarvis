@@ -1,9 +1,23 @@
+# Private by design. Nothing personal should ever be committed.
 .env
+.env.*
+!.env.example
+ME.md
 __pycache__/
 *.pyc
-memory/*.md
 .DS_Store
 node_modules/
-memory/trading/lessons/
-memory/trading/journal.jsonl
 *.zip
+*.log
+*.sqlite
+*.db
+# memory: only the shared trading lessons that ship with JARVIS are tracked
+memory/*
+!memory/.gitkeep
+!memory/trading/
+memory/trading/*
+!memory/trading/[0-9][0-9]-*.md
+# real data and exports stay on her Mac (only the invented demo ships)
+data/*
+!data/demo/
+!data/generate_demo.py

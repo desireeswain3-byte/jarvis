@@ -33,6 +33,9 @@ TOOL_SCHEMAS = [
     {"name": "daily_math",
      "description": "Day by day trading math. Gives what a daily percentage does to an account over a day, week, month, 3 months and a year, and the expected daily result from win rate, reward to risk, risk per trade and trades per day. Exact arithmetic, not a prediction.",
      "input_schema": {"type": "object", "properties": {"account": {"type": "number"}, "daily_percent": {"type": "number"}, "add_per_day": {"type": "number"}, "win_rate": {"type": "number"}, "reward_to_risk": {"type": "number"}, "risk_percent": {"type": "number"}, "trades_per_day": {"type": "number"}}, "required": ["account"]}},
+    {"name": "autopilot",
+     "description": "Switch the practice-account autopilot on or off, or say what it is doing. It trades ONLY the practice account with fake money, never a live account, and only with strict limits (small size, daily buy limit, daily loss stop, profit guard, sell before the close). Use for 'turn on autopilot', 'let him trade the practice account', 'autopilot off', 'what is autopilot doing'. Never say it will make money.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off", "status"]}}, "required": ["action"]}},
     {"name": "market_today",
      "description": "Where the stock market is right now: the main index funds (SPY, QQQ, DIA, IWM) and the biggest movers on the watchlist, from free data on her broker keys. Describes, never predicts. Use for 'how is the market today', 'what is moving'.",
      "input_schema": {"type": "object", "properties": {}}},
@@ -410,6 +413,20 @@ class Toolbox:
             say = "At %+.2f%% a day, that loses money over time. Change the numbers before trading it." % g
         return {"say": say, "card": {"kind": "memory", "files": rows}, "facts": "Daily math at %+.3f%% per day on $%.2f (adding $%.2f a day). %s Day 1 %+.2f. Rows: %s. Real returns vary and most day traders lose money." % (g, a, add, note, day1, rows)}
 
+    def t_autopilot(self, action="status"):
+        import autopilot
+        if action in ("on", "off"):
+            ok, msg = autopilot.set_on(action == "on")
+            return {"say": msg, "card": None, "facts": msg}
+        st = autopilot.status()
+        if st["mode"] == "not connected":
+            msg = "Autopilot is off, because no practice account is connected yet."
+        elif st["mode"] != "paper":
+            msg = "Your account is set to live, so autopilot is locked off. It only runs on the practice account."
+        else:
+            msg = "Autopilot is %s on the practice account. Buys today: %d%s." % ("on" if st["on"] else "off", st["buys_today"], (", holding " + ", ".join(st["holding"])) if st["holding"] else "")
+        return {"say": msg, "card": None, "facts": msg}
+
     def t_market_today(self):
         import watch as _w
         if not broker.configured():
@@ -646,6 +663,7 @@ class Toolbox:
                 card["shields"] = [{"name": "Per-order limit", "state": "$%.2f" % broker.max_order()},
                                    {"name": "Orders per day", "state": str(broker.max_orders_per_day())},
                                    {"name": "Profit guard", "state": ("ON: sells at %.0f%% giveback or %.0f%% loss" % (__import__("watch")._fnum("GUARD_GIVEBACK", 40.0), __import__("watch")._fnum("GUARD_MAX_LOSS", 3.0))) if __import__("watch").guard_enabled() else "OFF"},
+                                   {"name": "Autopilot", "state": ("ON (practice only)" if __import__("autopilot").is_on() else "OFF")},
                                    {"name": "Circuit breaker", "state": "BLOCKS NEW ORDERS" if a["today"] <= -v["breaker"] else "ARMED"}]
             except broker.BrokerError as e:
                 card["note"] = "Broker not reachable, showing sample data. " + str(e)

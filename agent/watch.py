@@ -5,6 +5,7 @@ import random
 import threading
 import time
 
+import autopilot
 import broker
 import notify
 
@@ -128,6 +129,10 @@ class Watcher:
                 if broker.configured() and market_open() and time.time() - self.t_scan >= 90:
                     self.t_scan = time.time()
                     self.scan()
+                if broker.configured() and autopilot.is_on():
+                    from zoneinfo import ZoneInfo
+                    if autopilot.flatten_due(datetime.datetime.now(ZoneInfo("America/New_York"))):
+                        autopilot.flatten(broker.positions(), push)
                 if broker.configured():
                     self.check_broker()
                 elif SIM_EVERY > 0 and time.time() - t_sim >= SIM_EVERY:
@@ -197,6 +202,7 @@ class Watcher:
                 continue
             try:
                 broker.close_position(sym)
+                autopilot.record_close(p, why[1])
                 self.closed.add(sym)
                 push("guard", "%s: profit guard sold %s. %s. Final result about %s%s. Next step: review what happened in your journal before the next trade." % (label, sym, why[1], "-" if p["pl"] < 0 else "+", _money(p["pl"])))
             except broker.BrokerError as e:
@@ -215,6 +221,8 @@ class Watcher:
             if abs(d["pct"]) >= 2.0 and (rvol >= 1.5 or rvol == 0.0) and key not in self.flagged:
                 self.flagged.add(key)
                 push("signal", signal_text(sym, d, rvol))
+                if d["pct"] > 0:
+                    autopilot.consider(sym, d, rvol, push)   # practice account only, and only if she switched it on
 
     def sim_step(self):
         """Demo only: makes up a pipeline move so the feed can be seen working. Never touches any account."""

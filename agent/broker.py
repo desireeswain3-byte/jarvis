@@ -1,0 +1,169 @@
+"""Broker connection (Alpaca). Standard library only.
+
+Safety design:
+  * Paper (practice, fake money) is the default. Live needs BOTH ALPACA_MODE=live and ALPACA_ALLOW_LIVE=yes in .env.
+  * Nothing here places an order by itself. The model can only PROPOSE one. The order is sent only when the
+    person presses Confirm on screen, which calls place() through /api/broker/confirm.
+  * Hard limits: a maximum dollar size per order, a maximum number of orders per day, and no new orders once the
+    day's loss reaches the circuit breaker.
+"""
+import json
+import os
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+
+PAPER_URL = "https://paper-api.alpaca.markets"
+LIVE_URL = "https://api.alpaca.markets"
+SYMBOL = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
+
+
+class BrokerError(Exception):
+    pass
+
+
+def _key():
+    return os.environ.get("ALPACA_KEY_ID", "").strip()
+
+
+def _secret():
+    return os.environ.get("ALPACA_SECRET_KEY", "").strip()
+
+
+def configured():
+    return bool(_key() and _secret())
+
+
+def mode():
+    live = os.environ.get("ALPACA_MODE", "paper").strip().lower() == "live" and os.environ.get("ALPACA_ALLOW_LIVE", "").strip().lower() == "yes"
+    return "live" if live else "paper"
+
+
+def base():
+    return (os.environ.get("ALPACA_BASE_URL") or (LIVE_URL if mode() == "live" else PAPER_URL)).rstrip("/")
+
+
+def _num(name, default):
+    try:
+        v = float(os.environ.get(name, "") or default)
+        return v if v > 0 else default
+    except ValueError:
+        return default
+
+
+def max_order():
+    return _num("ALPACA_MAX_ORDER", 25.0)
+
+
+def max_orders_per_day():
+    return int(_num("ALPACA_MAX_ORDERS_PER_DAY", 5))
+
+
+def _req(method, path, body=None, host=None):
+    if not configured():
+        raise BrokerError("No broker keys. Add ALPACA_KEY_ID and ALPACA_SECRET_KEY to .env")
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request((host or base()) + path, data=data, method=method, headers={
+        "APCA-API-KEY-ID": _key(), "APCA-API-SECRET-KEY": _secret(),
+        "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "jarvis-local"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read().decode("utf-8", "replace")).get("message", "")
+        except Exception:  # noqa: BLE001
+            msg = ""
+        if e.code in (401, 403):
+            raise BrokerError("The broker refused the keys (%d). Check ALPACA_KEY_ID and ALPACA_SECRET_KEY, and that they match %s mode." % (e.code, mode()))
+        raise BrokerError("The broker said %d. %s" % (e.code, msg[:200]))
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise BrokerError("Could not reach the broker: %s" % getattr(e, "reason", e))
+    try:
+        return json.loads(raw.decode("utf-8")) if raw else {}
+    except ValueError:
+        raise BrokerError("The broker sent something I could not read.")
+
+
+def _f(x, default=0.0):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return default
+
+
+def account():
+    a = _req("GET", "/v2/account")
+    eq, last = _f(a.get("equity")), _f(a.get("last_equity"), _f(a.get("equity")))
+    return {"equity": eq, "today": eq - last, "cash": _f(a.get("cash")), "buying_power": _f(a.get("buying_power")),
+            "status": str(a.get("status", "")), "blocked": bool(a.get("trading_blocked") or a.get("account_blocked"))}
+
+
+def positions():
+    out = []
+    for p in _req("GET", "/v2/positions") or []:
+        out.append({"symbol": str(p.get("symbol", "")), "qty": _f(p.get("qty")), "value": _f(p.get("market_value")), "pl": _f(p.get("unrealized_pl")),
+                    "cost": _f(p.get("cost_basis")) or (_f(p.get("market_value")) - _f(p.get("unrealized_pl")))})
+    return out
+
+
+def orders(limit=8):
+    out = []
+    for o in _req("GET", "/v2/orders?status=all&direction=desc&limit=%d" % int(limit)) or []:
+        when = str(o.get("submitted_at") or o.get("created_at") or "")
+        out.append({"id": str(o.get("id", "")), "time": when[11:19] if len(when) >= 19 else when, "symbol": str(o.get("symbol", "")),
+                    "side": str(o.get("side", "")).upper(), "size": _f(o.get("notional")) or _f(o.get("filled_avg_price")) * _f(o.get("filled_qty")),
+                    "status": str(o.get("status", "")).upper().replace("_", " ")})
+    return out
+
+
+def orders_today():
+    n = 0
+    today = None
+    for o in _req("GET", "/v2/orders?status=all&direction=desc&limit=100") or []:
+        t = str(o.get("submitted_at") or o.get("created_at") or "")[:10]
+        today = today or t
+        if t and t == today:
+            n += 1
+    return n
+
+
+def place(symbol, side, notional):
+    """Send ONE market order sized in dollars. Only call this after the person confirmed on screen."""
+    symbol = (symbol or "").upper().strip()
+    side = (side or "").lower().strip()
+    if not SYMBOL.match(symbol):
+        raise BrokerError("That is not a valid ticker symbol.")
+    if side not in ("buy", "sell"):
+        raise BrokerError("Buy or sell?")
+    n = round(float(notional), 2)
+    if n < 1:
+        raise BrokerError("The smallest order is $1.")
+    if n > max_order():
+        raise BrokerError("That is over your per-order limit of $%.2f." % max_order())
+    return _req("POST", "/v2/orders", {"symbol": symbol, "side": side, "type": "market", "time_in_force": "day", "notional": "%.2f" % n})
+
+
+def snapshots(symbols):
+    """Price, change and volume for a few symbols. Free IEX data from the same keys. Not a prediction, just where things are."""
+    syms = ",".join(sorted({str(x).upper() for x in symbols if str(x).strip()}))
+    raw = _req("GET", "/v2/stocks/snapshots?symbols=%s&feed=iex" % syms, host="https://data.alpaca.markets") or {}
+    raw = raw.get("snapshots", raw)
+    out = {}
+    for sym, v in raw.items():
+        if not isinstance(v, dict):
+            continue
+        last = _f((v.get("latestTrade") or {}).get("p")) or _f((v.get("dailyBar") or {}).get("c"))
+        prev = _f((v.get("prevDailyBar") or {}).get("c"))
+        d = v.get("dailyBar") or {}
+        if last and prev:
+            out[sym] = {"price": last, "prev": prev, "pct": (last - prev) / prev * 100.0, "open": _f(d.get("o")), "high": _f(d.get("h")), "low": _f(d.get("l")),
+                        "vol": _f(d.get("v")), "prev_vol": _f((v.get("prevDailyBar") or {}).get("v"))}
+    return out
+
+
+def close_position(symbol):
+    """Sell the whole position. Only ever reduces risk, so the profit guard may do it without asking."""
+    sym = urllib.parse.quote(str(symbol).upper(), safe="")
+    return _req("DELETE", "/v2/positions/" + sym)

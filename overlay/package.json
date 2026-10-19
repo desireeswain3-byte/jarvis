@@ -1,0 +1,8 @@
+{
+  "name": "jarvis-overlay",
+  "version": "1.0.0",
+  "description": "See-through always-on-top window that shows JARVIS over everything",
+  "main": "main.js",
+  "scripts": { "start": "electron ." },
+  "devDependencies": { "electron": "^33.2.0" }
+}

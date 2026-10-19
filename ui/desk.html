@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JARVIS Desk Screen</title>
+<style>
+:root { --bg:#020a0c; --ink:#e6f7f7; --dim:#7fa6a8; --accent:#22d3c5; --glow:34,211,197; --panel:rgba(4,18,20,.92); --line:rgba(34,211,197,.3); --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+* { box-sizing:border-box; } html,body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,sans-serif; min-height:100%; }
+header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.5rem; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+h1 { margin:0; font:700 1.4rem var(--mono); letter-spacing:.2em; color:var(--accent); text-shadow:0 0 14px rgba(var(--glow),.6); }
+button { font:600 .75rem var(--mono); color:var(--accent); background:#000; border:1px solid var(--line); border-radius:.5rem; padding:.45rem .9rem; cursor:pointer; }
+main { display:grid; grid-template-columns:repeat(12,1fr); gap:1rem; padding:1rem 1.5rem 3rem; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.2rem; box-shadow:0 0 22px rgba(var(--glow),.1); }
+.c4 { grid-column:span 4; } .c6 { grid-column:span 6; } .c12 { grid-column:span 12; } @media (max-width:1000px) { .c4,.c6 { grid-column:span 12; } }
+h3 { margin:0 0 .7rem; font:700 .75rem var(--mono); letter-spacing:.14em; color:var(--accent); }
+.item { padding:.5rem 0; border-bottom:1px solid rgba(var(--glow),.1); font-size:.85rem; line-height:1.45; white-space:pre-wrap; }
+.item b { display:block; font-size:.78rem; color:var(--accent); font-family:var(--mono); }
+.dim { color:var(--dim); } .hint { font:.72rem var(--mono); color:var(--dim); margin-top:.6rem; }
+</style></head><body>
+<header><div><h1>J.A.R.V.I.S. DESK</h1><div class="hint" style="margin:0">Your day, notes and lessons. Drag this window to another monitor.</div></div><button id="bring" type="button">Bring JARVIS here</button></header>
+<main>
+  <div class="panel c4"><h3>TODAY'S BRIEF</h3><div id="brief" class="dim">Loading</div></div>
+  <div class="panel c4"><h3>WHAT NEEDS ATTENTION FIRST</h3><div id="plan" class="dim">Loading</div></div>
+  <div class="panel c4"><h3>QUOTE OF THE DAY</h3><div id="quote" style="line-height:1.5"></div><div class="dim" id="by" style="margin-top:.5rem;font:.75rem var(--mono)"></div></div>
+  <div class="panel c6"><h3>WHAT JARVIS REMEMBERS</h3><div id="mem" class="dim">Loading</div></div>
+  <div class="panel c6"><h3>LATEST TRADING ALERTS</h3><div id="ev" class="dim">Nothing yet.</div></div>
+</main>
+<script>window.SCREEN_NAME = "desk";</script><script src="/armillary.js"></script><script src="/screenorb.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const post = (name) => fetch("/api/tool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).then((r) => r.json());
+const item = (t, b) => { const d = document.createElement("div"); d.className = "item"; if (t) { const h = document.createElement("b"); h.textContent = t; d.appendChild(h); } d.appendChild(document.createTextNode(b || "")); return d; };
+async function load() {
+  try { const r = await post("brief_me"); const c = r.card; const el = $("#brief"); el.textContent = ""; (c.sections || []).forEach((s) => el.appendChild(item(s.title, s.lines.join("\n")))); } catch (e) { $("#brief").textContent = "Could not load."; }
+  try { const r = await post("plan_day"); const el = $("#plan"); el.textContent = ""; const it = (r.card && r.card.items) || []; if (!it.length) el.appendChild(item("", "Nothing pressing.")); it.forEach((x) => el.appendChild(item(x.n + ". " + x.action, x.why))); } catch (e) { $("#plan").textContent = "Could not load."; }
+  try { const r = await post("wellness"); $("#quote").textContent = r.card.quote; $("#by").textContent = r.card.by; } catch (e) { /* ignore */ }
+  try { const j = await (await fetch("/api/memory")).json(); const el = $("#mem"); el.textContent = ""; (j.files || []).slice(0, 8).forEach((f) => el.appendChild(item(f.file, f.text))); if (!(j.files || []).length) el.textContent = "Nothing remembered yet."; } catch (e) { /* ignore */ }
+  try { const j = await (await fetch("/api/events?since=0")).json(); const el = $("#ev"); if (j.events.length) { el.textContent = ""; j.events.slice(-8).reverse().forEach((e) => el.appendChild(item(new Date(e.t * 1000).toLocaleTimeString(), e.say))); } } catch (e) { /* ignore */ }
+}
+load(); setInterval(load, 60000);
+</script></body></html>

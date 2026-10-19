@@ -1,0 +1,162 @@
+[
+  {
+    "id": "INV-1001",
+    "client": "Harbor & Pine",
+    "label": "Deposit",
+    "total": 3250,
+    "paid": 3250,
+    "due": "2026-03-18",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1002",
+    "client": "Harbor & Pine",
+    "label": "Final",
+    "total": 3250,
+    "paid": 3250,
+    "due": "2026-05-20",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1003",
+    "client": "Wren Candles",
+    "label": "Deposit",
+    "total": 2100,
+    "paid": 2100,
+    "due": "2026-04-02",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1004",
+    "client": "Wren Candles",
+    "label": "Final",
+    "total": 2100,
+    "paid": 0,
+    "due": "2026-09-20",
+    "status": "sent",
+    "note": "Final invoice. No payment received yet."
+  },
+  {
+    "id": "INV-1005",
+    "client": "Tidewater Coffee",
+    "label": "Deposit",
+    "total": 4450,
+    "paid": 4450,
+    "due": "2026-06-10",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1006",
+    "client": "Tidewater Coffee",
+    "label": "Final",
+    "total": 4450,
+    "paid": 0,
+    "due": "2026-11-10",
+    "status": "sent",
+    "note": "Final invoice, not yet due."
+  },
+  {
+    "id": "INV-1007",
+    "client": "Fieldnote Press",
+    "label": "Deposit",
+    "total": 2700,
+    "paid": 2700,
+    "due": "2026-05-05",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1008",
+    "client": "Fieldnote Press",
+    "label": "Final",
+    "total": 2700,
+    "paid": 2700,
+    "due": "2026-07-15",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1009",
+    "client": "Marlow Bikes",
+    "label": "Deposit",
+    "total": 3900,
+    "paid": 3900,
+    "due": "2026-07-01",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1010",
+    "client": "Marlow Bikes",
+    "label": "Milestone",
+    "total": 3900,
+    "paid": 1950,
+    "due": "2026-10-30",
+    "status": "running",
+    "note": "Milestone invoice. Half paid because the build is still running, not a discount."
+  },
+  {
+    "id": "INV-1011",
+    "client": "Salt & Thread",
+    "label": "Deposit",
+    "total": 2400,
+    "paid": 2400,
+    "due": "2026-06-22",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1012",
+    "client": "Salt & Thread",
+    "label": "Final",
+    "total": 2400,
+    "paid": 0,
+    "due": "2026-10-05",
+    "status": "sent",
+    "note": "Final invoice. No payment received yet."
+  },
+  {
+    "id": "INV-1013",
+    "client": "Oakridge Pet Supply",
+    "label": "Deposit",
+    "total": 4500,
+    "paid": 4500,
+    "due": "2026-08-03",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1014",
+    "client": "Oakridge Pet Supply",
+    "label": "Final",
+    "total": 4500,
+    "paid": 0,
+    "due": "2026-10-30",
+    "status": "sent",
+    "note": "Final invoice, not yet due."
+  },
+  {
+    "id": "INV-1015",
+    "client": "Lumen Skincare",
+    "label": "Deposit",
+    "total": 3050,
+    "paid": 3050,
+    "due": "2026-04-28",
+    "status": "paid",
+    "note": ""
+  },
+  {
+    "id": "INV-1016",
+    "client": "Lumen Skincare",
+    "label": "Final",
+    "total": 3050,
+    "paid": 3050,
+    "due": "2026-06-30",
+    "status": "paid",
+    "note": ""
+  }
+]

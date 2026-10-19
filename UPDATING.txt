@@ -1,0 +1,7 @@
+To install an update (paste this whole block into Terminal, then press Return):
+
+cd ~/jarvis && unzip -o "$(ls -t ~/Downloads/jarvis-update*.zip | head -1)" >/dev/null && launchctl kickstart -k gui/$(id -u)/com.jarvis; sleep 4; echo "Files say:"; grep -m1 "^BUILD" ~/jarvis/agent/main.py; echo "Running server says:"; curl -s localhost:8765/api/status | head -c 20; echo
+
+Then reload the JARVIS tab in Chrome (Command+Shift+R).
+
+From this version on, JARVIS restarts himself a few seconds after new files are unzipped, so the unzip alone is enough.

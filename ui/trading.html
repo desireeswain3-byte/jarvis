@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS Trading Screen</title>
+<style>
+:root { --bg:#020a0c; --ink:#e6f7f7; --dim:#7fa6a8; --accent:#22d3c5; --glow:34,211,197; --panel:rgba(4,18,20,.92); --line:rgba(34,211,197,.3); --danger:#ef4444; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace; --font:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+* { box-sizing:border-box; }
+html,body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); min-height:100%; }
+header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.5rem; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+h1 { margin:0; font:700 1.4rem var(--mono); letter-spacing:.2em; color:var(--accent); text-shadow:0 0 14px rgba(var(--glow),.6); }
+.pill { font:600 .72rem var(--mono); padding:.25rem .7rem; border:1px solid var(--line); border-radius:99px; color:var(--accent); }
+.pill.live { color:#fff; background:var(--danger); border-color:var(--danger); }
+button { font:600 .75rem var(--mono); color:var(--accent); background:#000; border:1px solid var(--line); border-radius:.5rem; padding:.45rem .9rem; cursor:pointer; }
+button:hover { background:rgba(var(--glow),.15); }
+button.go { background:var(--accent); color:#000; }
+main { display:grid; grid-template-columns:repeat(12,1fr); gap:1rem; padding:1rem 1.5rem 3rem; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.2rem; box-shadow:0 0 22px rgba(var(--glow),.1); }
+.c4 { grid-column:span 4; } .c8 { grid-column:span 8; } .c12 { grid-column:span 12; } .c6 { grid-column:span 6; }
+@media (max-width:1000px) { .c4,.c6,.c8 { grid-column:span 12; } }
+h3 { margin:0 0 .6rem; font:700 .75rem var(--mono); letter-spacing:.14em; color:var(--accent); }
+.k { font:600 .65rem var(--mono); color:var(--dim); letter-spacing:.12em; }
+.v { font:700 1.8rem var(--mono); color:var(--accent); margin-top:.2rem; }
+.s { font:.75rem var(--mono); color:var(--dim); }
+.up { color:#4ade80; } .neg { color:#f87171; }
+table { width:100%; border-collapse:collapse; font:.78rem var(--mono); }
+th { text-align:left; color:var(--dim); font-weight:600; padding:.35rem .5rem; border-bottom:1px solid var(--line); }
+td { padding:.4rem .5rem; border-bottom:1px solid rgba(var(--glow),.1); }
+.sym { color:var(--accent); font-weight:700; } .buy { color:#4ade80; } .sell { color:#f87171; }
+.row { display:flex; justify-content:space-between; font:.78rem var(--mono); padding:.35rem 0; border-bottom:1px solid rgba(var(--glow),.08); }
+.hint { font:.72rem var(--mono); color:var(--dim); margin-top:.6rem; }
+#feed { max-height:15rem; overflow:auto; font:.78rem var(--mono); }
+#feed div { padding:.35rem 0; border-bottom:1px solid rgba(var(--glow),.08); }
+#feed .t { color:var(--dim); margin-right:.5rem; }
+input { width:100%; background:#000; color:var(--ink); border:1px solid var(--line); border-radius:.5rem; padding:.6rem .8rem; font:.8rem var(--mono); }
+#out { margin-top:.7rem; padding:.7rem; background:#000; border:1px solid var(--line); border-radius:.5rem; font:.8rem var(--mono); display:none; white-space:pre-wrap; }
+.btnrow { display:flex; gap:.5rem; margin-top:.6rem; }
+#orb2 { position:fixed; right:1.2rem; bottom:1.2rem; width:9rem; text-align:center; display:none; z-index:5000; }
+#orb2 canvas { width:9rem; height:9rem; }
+#orb2 .lab { font:.65rem var(--mono); color:var(--accent); }
+.slim { font:.7rem var(--mono); color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>J.A.R.V.I.S. TRADING</h1><div class="slim">Madam Swain Command Hub. This is its own screen: drag this window to another monitor.</div></div>
+  <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+    <span class="pill" id="mode">LOADING</span>
+    <button id="bring" type="button" title="Move JARVIS the orb onto this screen">Bring JARVIS here</button>
+    <button id="refresh" type="button">Refresh</button>
+  </div>
+</header>
+<main>
+  <div class="panel c4"><div class="k">VAULT EQUITY</div><div class="v" id="eq">...</div><div class="s" id="today"></div></div>
+  <div class="panel c4"><div class="k">CIRCUIT BREAKER LIMIT</div><div class="v" id="brk">...</div><div class="s up">Status: ARMED</div></div>
+  <div class="panel c4"><div class="k">AUTO CASH SWEEP</div><div class="v" id="swp">...</div><div class="s">Threshold set</div></div>
+
+  <div class="panel c8">
+    <h3 id="pipe-h">MASTER TRADER PIPELINE</h3>
+    <table><thead><tr><th>TIME</th><th>SYMBOL</th><th>RANK</th><th>ACTION</th><th>SIZE</th><th>STATUS</th></tr></thead><tbody id="rows"></tbody></table>
+    <div class="hint" id="pipe-note"></div>
+  </div>
+  <div class="panel c4">
+    <h3>LIVE ALERTS</h3>
+    <div id="feed"><div class="s">Waiting for changes. JARVIS tells you out loud on the main screen as they happen, nothing to ask.</div></div>
+  </div>
+
+  <div class="panel c6"><h3>OPEN POSITIONS</h3><div id="pos" class="s">None</div></div>
+  <div class="panel c6"><h3 id="shield-h">RISK SHIELDS</h3><div id="shields"></div></div>
+
+  <div class="panel c8">
+    <h3>ARCHITECT CONSOLE</h3>
+    <input id="cmd" type="text" placeholder="J.A.R.V.I.S., change our daily circuit breaker to $75   |   buy 10 dollars of AAPL" autocomplete="off">
+    <div id="out"></div>
+    <div class="hint">Real orders are only ever lined up here. Nothing is sent until you press Confirm yourself.</div>
+  </div>
+  <div class="panel c12">
+    <h3>WHAT IF CALCULATOR (MATH, NOT A PREDICTION)</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.7rem">
+      <label class="slim">Start with ($)<input id="cs" type="number" value="1000" min="0"></label>
+      <label class="slim">Add each month ($)<input id="cm" type="number" value="100" min="0"></label>
+      <label class="slim">Years<input id="cy" type="number" value="5" min="1" max="40"></label>
+      <label class="slim">Your own yearly return guess (%)<input id="cr" type="number" value="8" step="0.5"></label>
+    </div>
+    <table style="margin-top:.8rem"><thead><tr><th>SCENARIO</th><th>YEARLY</th><th>YOU PUT IN</th><th>WOULD BE WORTH</th><th>GAIN</th></tr></thead><tbody id="calc"></tbody></table>
+    <div class="hint">Nobody can know future returns, JARVIS included. This only shows what a steady yearly percentage would do to the money you put in. Real returns go up and down, and you can lose money.</div>
+  </div>
+  <div class="panel c12">
+    <h3>DAY TRADER MATH (PER TRADING DAY)</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.7rem">
+      <label class="slim">Account today ($)<input id="da" type="number" value="100" min="0"></label>
+      <label class="slim">Add each trading day ($)<input id="dadd" type="number" value="0" min="0"></label>
+      <label class="slim">Risk per trade (% of account)<input id="drisk" type="number" value="1" step="0.25" min="0.1"></label>
+      <label class="slim">Trades per day<input id="dn" type="number" value="2" min="1"></label>
+      <label class="slim">Win rate (%)<input id="dwr" type="number" value="45" min="1" max="99"></label>
+      <label class="slim">Reward to risk (e.g. 2 means 2 to 1)<input id="drr" type="number" value="2" step="0.25" min="0.25"></label>
+    </div>
+    <div id="dsum" class="hint" style="font-size:.85rem;color:var(--ink)"></div>
+    <table style="margin-top:.8rem"><thead><tr><th>IF YOU AVERAGE PER DAY</th><th>DAY 1</th><th>1 WEEK (5)</th><th>1 MONTH (21)</th><th>3 MONTHS (63)</th><th>1 YEAR (252)</th></tr></thead><tbody id="dtab"></tbody></table>
+    <div class="hint">Each row compounds a steady daily percentage, which real trading never does: days swing up and down, and many days are losses or flat. Most day traders lose money. The first line above uses your own win rate and reward to risk, and a win rate under 34 percent at 2 to 1 loses money over time. Practice on the paper account first.</div>
+  </div>
+  <div class="panel c4"><h3>QUOTE OF THE DAY</h3><div id="quote" style="font-size:.95rem;line-height:1.5"></div><div class="s" id="by" style="margin-top:.5rem"></div></div>
+</main>
+<script>window.SCREEN_NAME = "trading";</script><script src="/armillary.js"></script><script src="/screenorb.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const money = (x) => "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = (t) => { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; };
+
+async function load() {
+  try {
+    const r = await (await fetch("/api/tool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "trading" }) })).json();
+    const c = r.card; if (!c) return;
+    const sim = c.source === "sample";
+    const m = $("#mode");
+    m.textContent = { sample: "SIMULATED DEMO, NOT LIVE", paper: "PRACTICE ACCOUNT, FAKE MONEY", live: "LIVE ACCOUNT, REAL MONEY" }[c.source] || "SIMULATED DEMO, NOT LIVE";
+    m.className = "pill" + (c.source === "live" ? " live" : "");
+    $("#eq").textContent = c.equity; $("#brk").textContent = c.breaker; $("#swp").textContent = c.sweep;
+    const eqN = parseFloat(String(c.equity).replace(/[^0-9.]/g, "")) || 0, tdN = parseFloat(String(c.today).replace(/[^0-9.]/g, "")) || 0;
+    const pct = eqN ? (tdN / (eqN - (String(c.today).startsWith("-") ? -tdN : tdN)) * 100) : 0;
+    $("#today").textContent = c.today + " (" + (String(c.today).startsWith("-") ? "-" : "+") + pct.toFixed(2) + "%)" + (sim ? " sample" : ""); $("#today").className = "s " + (String(c.today).startsWith("-") ? "neg" : "up");
+    $("#pipe-h").textContent = sim ? "MASTER TRADER PIPELINE (SIMULATED, NOT LIVE)" : "RECENT ORDERS";
+    $("#pipe-note").textContent = sim ? "Simulated ranks and trades so you can see how the pipeline looks and how alerts arrive. There is no real feed of other traders behind this, and no money moves." : "These are orders on your connected account.";
+    $("#shield-h").textContent = sim ? "RISK SHIELDS (DEMO LABELS)" : "SAFETY LIMITS";
+    $("#rows").innerHTML = (c.trades || []).map((t) => `<tr><td>${esc(t.time)}</td><td class="sym">${esc(t.symbol)}</td><td>${esc(t.rank || "")}</td><td class="${t.action === "SELL" ? "sell" : "buy"}">${esc(t.action)}</td><td>${money(t.size)} <span class="s">${eqN ? (t.size / eqN * 100).toFixed(2) + "%" : ""}</span></td><td>${esc(t.status)}</td></tr>`).join("");
+    $("#pos").innerHTML = (c.positions && c.positions.length) ? c.positions.map((p) => `<div class="row"><span>${esc(p.symbol)}  ${p.qty}</span><b class="${p.pl < 0 ? "neg" : "up"}">${money(p.value)} (${p.pl >= 0 ? "+" : "-"}${money(Math.abs(p.pl))}, ${p.value - p.pl ? (p.pl / (p.value - p.pl) * 100).toFixed(2) : "0.00"}%) &middot; ${eqN ? (p.value / eqN * 100).toFixed(1) : "0"}% of account</b></div>`).join("") : "None";
+    $("#shields").innerHTML = (c.shields || []).map((s) => `<div class="row"><span>${esc(s.name)}</span><b>${esc(s.state)}</b></div>`).join("");
+  } catch (e) { $("#mode").textContent = "CANNOT REACH JARVIS"; }
+  try {
+    const w = await (await fetch("/api/tool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "wellness" }) })).json();
+    if (w.card) { $("#quote").textContent = w.card.quote; $("#by").textContent = w.card.by; }
+  } catch (e) { /* ignore */ }
+}
+
+function calc() {
+  const S0 = +$("#cs").value || 0, M = +$("#cm").value || 0, Y = Math.max(1, +$("#cy").value || 1), mine = +$("#cr").value || 0;
+  const sc = [["Cash savings", 0.5], ["Cautious", 4], ["Market-like", 8], ["Your guess", mine], ["Bad stretch", -10]];
+  $("#calc").innerHTML = sc.map(([n, r]) => {
+    let v = S0; const mr = Math.pow(1 + r / 100, 1 / 12) - 1;
+    for (let i = 0; i < Y * 12; i++) v = v * (1 + mr) + M;
+    const put = S0 + M * Y * 12, g = v - put;
+    return `<tr><td>${n}</td><td>${r}%</td><td>${money(put)}</td><td class="sym">${money(v)}</td><td class="${g < 0 ? "neg" : "up"}">${g < 0 ? "-" : "+"}${money(Math.abs(g))} (${put ? (g / put * 100).toFixed(1) : 0}%)</td></tr>`;
+  }).join("");
+}
+["cs", "cm", "cy", "cr"].forEach((i) => $("#" + i).addEventListener("input", calc)); calc();
+
+function dcalc() {
+  const A = +$("#da").value || 0, add = +$("#dadd").value || 0, risk = (+$("#drisk").value || 0) / 100, n = +$("#dn").value || 0, wr = (+$("#dwr").value || 0) / 100, rr = +$("#drr").value || 0;
+  const ev = n * risk * (wr * rr - (1 - wr));          // expected share of the account per day
+  const evd = A * ev;
+  $("#dsum").textContent = "With " + n + " trades a day, risking " + (risk * 100).toFixed(2) + "% each, " + (wr * 100).toFixed(0) + "% winners and " + rr + " to 1 reward, the average is " + (ev >= 0 ? "+" : "-") + (Math.abs(ev) * 100).toFixed(2) + "% a day, about " + (evd >= 0 ? "+" : "-") + money(Math.abs(evd)) + " on " + money(A) + ". " + (ev <= 0 ? "That is a losing system, so change the numbers before trading it." : "A bad week of losses in a row can still happen even with a good system.");
+  const rows = [["Your numbers above", ev * 100], ["Careful good day", 0.5], ["Strong day", 1], ["Great day (rare)", 2], ["Losing day", -1]];
+  const at = (g, d) => { let v = A; for (let i = 0; i < d; i++) v = v * (1 + g / 100) + add; return v; };
+  $("#dtab").innerHTML = rows.map(([n2, g]) => {
+    const cell = (d) => { const v = at(g, d); const diff = v - (A + add * d); return `${money(v)} <span class="${diff < 0 ? "neg" : "up"}">(${diff < 0 ? "-" : "+"}${money(Math.abs(diff))})</span>`; };
+    return `<tr><td>${n2} (${g.toFixed(2)}%)</td><td>${cell(1)}</td><td>${cell(5)}</td><td>${cell(21)}</td><td>${cell(63)}</td><td>${cell(252)}</td></tr>`;
+  }).join("");
+}
+["da", "dadd", "drisk", "dn", "dwr", "drr"].forEach((i) => $("#" + i).addEventListener("input", dcalc)); dcalc();
+
+/* alerts feed (the main JARVIS screen speaks them; this screen lists them) */
+let since = 0;
+async function feed() {
+  try {
+    const j = await (await fetch("/api/events?since=" + since)).json();
+    if (j.events.length) {
+      const f = $("#feed"); if (since === 0) f.textContent = "";
+      j.events.forEach((e) => {
+        since = Math.max(since, e.id);
+        const d = document.createElement("div");
+        const t = document.createElement("span"); t.className = "t"; t.textContent = new Date(e.t * 1000).toLocaleTimeString();
+        d.append(t, document.createTextNode(e.say));
+        f.prepend(d);
+      });
+      load();
+    } else since = Math.max(since, j.last || 0);
+  } catch (e) { /* retry */ }
+}
+setInterval(feed, 8000); feed();
+setInterval(load, 30000); load();
+$("#refresh").addEventListener("click", load);
+
+/* architect console */
+$("#cmd").addEventListener("keydown", async (ev) => {
+  if (ev.key !== "Enter") return;
+  const text = ev.target.value.trim(); if (!text) return;
+  const out = $("#out"); out.style.display = "block"; out.textContent = "Working on it...";
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const j = await r.json();
+    out.textContent = j.reply || "(done)";
+    (j.actions || []).forEach((a) => { const to = a.type === "screen" ? a.to : (a.type === "orb" && (a.to === "home" || a.to === "center")) ? "main" : null; if (to && window.ScreenOrb) window.ScreenOrb.go(to); });
+    (j.cards || []).forEach((c) => {
+      if (c.kind !== "order") return;
+      const row = document.createElement("div"); row.className = "btnrow";
+      const ok = document.createElement("button"); ok.className = "go"; ok.type = "button"; ok.textContent = "Confirm " + c.side + " " + c.amount + " of " + c.symbol + (c.mode === "live" ? " (REAL MONEY)" : " (practice)");
+      const no = document.createElement("button"); no.type = "button"; no.textContent = "Cancel";
+      ok.addEventListener("click", async (e) => {
+        if (!e.isTrusted) return;
+        ok.disabled = no.disabled = true;
+        try {
+          const rr = await fetch("/api/broker/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) });
+          const jj = await rr.json(); if (!rr.ok) throw new Error(jj.error || rr.statusText);
+          out.textContent = jj.say || "Sent."; row.remove(); load();
+        } catch (er) { out.textContent = "Order not sent. " + er.message; row.remove(); }
+      });
+      no.addEventListener("click", async () => { try { await fetch("/api/broker/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) }); } catch (e) { /* ignore */ } out.textContent = "Cancelled. Nothing was sent."; row.remove(); });
+      row.append(ok, no); out.appendChild(row);
+    });
+    ev.target.value = ""; load();
+  } catch (e) { out.textContent = "Could not reach JARVIS: " + e.message; }
+});
+
+/* JARVIS can travel to this screen: see screenorb.js */
+</script>
+</body>
+</html>

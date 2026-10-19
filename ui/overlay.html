@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>JARVIS overlay</title>
+<style>
+html,body { margin:0; height:100%; background:transparent; overflow:hidden; font-family:ui-monospace,Menlo,monospace; user-select:none; }
+#orb { position:fixed; width:160px; height:160px; left:calc(100vw - 190px); top:calc(100vh - 230px); cursor:grab; transition:left .9s cubic-bezier(.3,.8,.3,1), top .9s cubic-bezier(.3,.8,.3,1); }
+#orb.drag { transition:none; cursor:grabbing; }
+canvas { width:160px; height:160px; display:block; }
+#cap { position:absolute; left:50%; top:162px; transform:translateX(-50%); width:320px; text-align:center; color:#e6f7f7; font-size:13px; text-shadow:0 1px 8px #000,0 0 3px #000; pointer-events:none; }
+</style></head>
+<body>
+<div id="orb"><canvas id="c" width="320" height="320"></canvas><div id="cap"></div></div>
+<script>
+const orb = document.getElementById("orb"), cv = document.getElementById("c").getContext("2d"), cap = document.getElementById("cap");
+let st = "idle", t = 0, seq = -1, dragging = false, ox = 0, oy = 0;
+const M = 24;
+function place(name) {
+  const W = innerWidth, H = innerHeight, w = 160, h = 160;
+  const P = { left: [M, (H - h) / 2], right: [W - w - M, (H - h) / 2], top: [(W - w) / 2, M], bottom: [(W - w) / 2, H - h - 70], center: [(W - w) / 2, (H - h) / 2],
+    "top-left": [M, M], "top-right": [W - w - M, M], "bottom-left": [M, H - h - 70], "bottom-right": [W - w - M, H - h - 70], home: [W - w - 30, H - h - 70] }[name];
+  if (P) { orb.style.left = P[0] + "px"; orb.style.top = P[1] + "px"; }
+}
+async function poll() {
+  try {
+    const j = await (await fetch("/api/orb?overlay=1")).json();
+    st = j.state; cap.textContent = j.caption || "";
+    if (seq < 0) seq = j.move_seq; else if (j.move_seq !== seq) { seq = j.move_seq; place(j.move); }
+  } catch (e) { /* server restarting */ }
+}
+setInterval(poll, 250); poll();
+function draw() {
+  requestAnimationFrame(draw);
+  t++;
+  const a = st === "speaking" ? 1 : st === "listening" ? .7 : st === "thinking" ? .85 : .3;
+  const sp = st === "speaking" ? 4 : st === "thinking" ? 8 : 20;
+  const r = 70 + Math.sin(t / sp) * 10 * a;
+  cv.clearRect(0, 0, 320, 320);
+  const g = cv.createRadialGradient(160, 160, 6, 160, 160, r + 50);
+  g.addColorStop(0, "rgba(34,211,197,.95)"); g.addColorStop(.45, "rgba(34,211,197,.35)"); g.addColorStop(1, "rgba(34,211,197,0)");
+  cv.fillStyle = g; cv.beginPath(); cv.arc(160, 160, r + 50, 0, 7); cv.fill();
+  cv.strokeStyle = "rgba(34,211,197,.9)"; cv.lineWidth = 3; cv.beginPath(); cv.arc(160, 160, r, 0, 7); cv.stroke();
+  cv.strokeStyle = "rgba(34,211,197,.5)"; cv.beginPath(); cv.arc(160, 160, r * .62, t / 30, t / 30 + 4.2); cv.stroke();
+}
+draw();
+/* only the orb catches the mouse; everywhere else clicks go straight through to whatever is under it */
+const ipc = window.jarvisOverlay;
+orb.addEventListener("mouseenter", () => ipc && ipc.catchMouse(true));
+orb.addEventListener("mouseleave", () => { if (!dragging && ipc) ipc.catchMouse(false); });
+orb.addEventListener("mousedown", (e) => { dragging = true; orb.classList.add("drag"); ox = e.clientX - orb.offsetLeft; oy = e.clientY - orb.offsetTop; });
+addEventListener("mousemove", (e) => { if (!dragging) return; orb.style.left = Math.max(0, Math.min(innerWidth - 160, e.clientX - ox)) + "px"; orb.style.top = Math.max(0, Math.min(innerHeight - 160, e.clientY - oy)) + "px"; });
+addEventListener("mouseup", () => { dragging = false; orb.classList.remove("drag"); });
+place("home");
+</script></body></html>

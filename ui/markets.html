@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JARVIS Markets Screen</title>
+<style>
+:root { --bg:#020a0c; --ink:#e6f7f7; --dim:#7fa6a8; --accent:#22d3c5; --glow:34,211,197; --panel:rgba(4,18,20,.92); --line:rgba(34,211,197,.3); --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+* { box-sizing:border-box; } html,body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,sans-serif; min-height:100%; }
+header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.5rem; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+h1 { margin:0; font:700 1.4rem var(--mono); letter-spacing:.2em; color:var(--accent); text-shadow:0 0 14px rgba(var(--glow),.6); }
+.pill { font:600 .72rem var(--mono); padding:.25rem .7rem; border:1px solid var(--line); border-radius:99px; color:var(--accent); }
+button { font:600 .75rem var(--mono); color:var(--accent); background:#000; border:1px solid var(--line); border-radius:.5rem; padding:.45rem .9rem; cursor:pointer; }
+main { display:grid; grid-template-columns:repeat(12,1fr); gap:1rem; padding:1rem 1.5rem 3rem; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.2rem; box-shadow:0 0 22px rgba(var(--glow),.1); }
+.c3 { grid-column:span 3; } .c12 { grid-column:span 12; } @media (max-width:900px) { .c3 { grid-column:span 6; } }
+h3 { margin:0 0 .7rem; font:700 .75rem var(--mono); letter-spacing:.14em; color:var(--accent); }
+.k { font:600 .65rem var(--mono); color:var(--dim); letter-spacing:.12em; } .v { font:700 1.6rem var(--mono); margin-top:.2rem; } .s { font:.78rem var(--mono); }
+.up { color:#4ade80; } .neg { color:#f87171; } .dim { color:var(--dim); }
+.bar { display:grid; grid-template-columns:5rem 1fr 5.5rem; align-items:center; gap:.6rem; font:.78rem var(--mono); padding:.25rem 0; }
+.track { position:relative; height:.9rem; background:rgba(var(--glow),.08); border-radius:.2rem; }
+.track i { position:absolute; top:0; bottom:0; border-radius:.2rem; }
+.track .mid { position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--line); }
+table { width:100%; border-collapse:collapse; font:.78rem var(--mono); } th { text-align:left; color:var(--dim); padding:.35rem .5rem; border-bottom:1px solid var(--line); } td { padding:.4rem .5rem; border-bottom:1px solid rgba(var(--glow),.1); }
+.hint { font:.72rem var(--mono); color:var(--dim); margin-top:.6rem; }
+</style></head><body>
+<header><div><h1>J.A.R.V.I.S. MARKETS</h1><div class="hint" style="margin:0">Where the market is right now. It describes, it never predicts. Drag this window to another monitor.</div></div>
+<div style="display:flex;gap:.6rem;align-items:center"><span class="pill" id="open">LOADING</span><span class="pill" id="clock"></span><button id="bring" type="button">Bring JARVIS here</button></div></header>
+<main>
+  <div id="idx" style="display:contents"></div>
+  <div class="panel c12"><h3>TODAY'S MOVES (PERCENT CHANGE SINCE YESTERDAY'S CLOSE)</h3><div id="bars"></div><div class="hint" id="note"></div></div>
+  <div class="panel c12"><h3>WATCHLIST</h3><table><thead><tr><th>SYMBOL</th><th>PRICE</th><th>CHANGE</th><th>DAY LOW</th><th>DAY HIGH</th><th>VOLUME</th></tr></thead><tbody id="rows"></tbody></table>
+  <div class="hint">Free IEX data from your Alpaca keys. It can differ a little from other sources. Edit WATCHLIST in .env to change the symbols.</div></div>
+</main>
+<script>window.SCREEN_NAME = "markets";</script><script src="/armillary.js"></script><script src="/screenorb.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; };
+const fmt = (x) => "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const names = { SPY: "S&P 500", QQQ: "NASDAQ 100", DIA: "DOW", IWM: "SMALL CAPS" };
+setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }, 1000);
+async function load() {
+  try {
+    const j = await (await fetch("/api/market")).json();
+    $("#open").textContent = j.open ? "MARKET OPEN" : "MARKET CLOSED";
+    if (!j.ok) { $("#note").textContent = j.error; return; }
+    $("#note").textContent = "";
+    $("#idx").innerHTML = (j.index || []).map((s) => { const r = j.rows.find((x) => x.symbol === s); if (!r) return ""; return `<div class="panel c3"><div class="k">${names[s]} (${s})</div><div class="v">${fmt(r.price)}</div><div class="s ${r.pct >= 0 ? "up" : "neg"}">${r.pct >= 0 ? "+" : ""}${r.pct.toFixed(2)}%</div></div>`; }).join("");
+    const rows = j.rows.slice().sort((a, b) => b.pct - a.pct);
+    const max = Math.max(1, ...rows.map((r) => Math.abs(r.pct)));
+    $("#bars").innerHTML = rows.map((r) => { const w = Math.abs(r.pct) / max * 50; return `<div class="bar"><b>${esc(r.symbol)}</b><div class="track"><span class="mid"></span><i style="${r.pct >= 0 ? "left:50%" : "right:50%"};width:${w}%;background:${r.pct >= 0 ? "#4ade80" : "#f87171"}"></i></div><span class="${r.pct >= 0 ? "up" : "neg"}">${r.pct >= 0 ? "+" : ""}${r.pct.toFixed(2)}%</span></div>`; }).join("");
+    $("#rows").innerHTML = rows.map((r) => `<tr><td><b>${esc(r.symbol)}</b></td><td>${fmt(r.price)}</td><td class="${r.pct >= 0 ? "up" : "neg"}">${r.pct >= 0 ? "+" : ""}${r.pct.toFixed(2)}%</td><td>${fmt(r.low)}</td><td>${fmt(r.high)}</td><td>${Math.round(r.vol).toLocaleString()}</td></tr>`).join("");
+  } catch (e) { $("#open").textContent = "CANNOT REACH JARVIS"; }
+}
+load(); setInterval(load, 20000);
+</script></body></html>

@@ -2,6 +2,7 @@
 """JARVIS server. Standard library only. Run: python3 agent/main.py"""
 import json
 import mimetypes
+import subprocess
 import os
 import sys
 import time
@@ -42,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 28   # shown in the top bar so you can see which update is running
+BUILD = 29   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -196,6 +197,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_ask(json.loads(raw or b"{}"))
             if path == "/api/tool":
                 return self.api_tool(json.loads(raw or b"{}"))
+            if path == "/api/update":
+                # Pull the newest JARVIS from GitHub. Needs a header a random website cannot send.
+                if self.headers.get("X-Jarvis") != "1":
+                    return self.send_json(403, {"ok": False, "error": "not allowed"})
+                return self.send_json(200, run_update())
             if path == "/api/restart":
                 self.send_json(200, {"ok": True})
                 threading.Timer(0.5, lambda: os.execv(sys.executable, [sys.executable] + sys.argv)).start()
@@ -295,6 +301,27 @@ class Handler(BaseHTTPRequestHandler):
         except voice.VoiceError as e:
             return self.send_json(503, {"error": str(e)})
         self.send_json(200, {"text": text})
+
+
+def run_update():
+    """git fetch and reset to the newest version. Her private files are untracked, so they are never touched."""
+    if not (ROOT / ".git").exists():
+        return {"ok": False, "message": "This folder is not connected to GitHub yet."}
+    def git(*a):
+        return subprocess.run(["git"] + list(a), cwd=str(ROOT), capture_output=True, text=True, timeout=90)
+    try:
+        before = git("rev-parse", "--short", "HEAD").stdout.strip()
+        f = git("fetch", "-q", "origin")
+        if f.returncode != 0:
+            return {"ok": False, "message": "Could not reach GitHub. Check the internet and try again.", "detail": f.stderr.strip()[-300:]}
+        r = git("reset", "-q", "--hard", "origin/main")
+        if r.returncode != 0:
+            return {"ok": False, "message": "The update did not apply.", "detail": r.stderr.strip()[-300:]}
+        after = git("rev-parse", "--short", "HEAD").stdout.strip()
+        return {"ok": True, "changed": before != after, "from": before, "to": after,
+                "message": "Already on the newest version." if before == after else "Updated. JARVIS is restarting."}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "message": "The update failed.", "detail": str(e)[:200]}
 
 
 def _code_stamp():

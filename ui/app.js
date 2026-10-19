@@ -85,7 +85,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 28;
+const UI_BUILD = 29;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -1080,4 +1080,21 @@ $("#b-hands").addEventListener("click", async () => {
   }
   btn.addEventListener("click", () => { on = !on; apply(false); });
   apply(true);
+})();
+
+
+/* ---------- Update button: pull the newest JARVIS from GitHub, then refresh ---------- */
+(function () {
+  const btn = $("#b-update");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true; btn.textContent = "Updating...";
+    try {
+      const r = await fetch("/api/update", { method: "POST", headers: { "X-Jarvis": "1" } });
+      const j = await r.json();
+      setCaption(j.message || (j.ok ? "Done." : "That did not work."), "JARVIS:");
+      if (j.ok && j.changed) { btn.textContent = "Restarting..."; setTimeout(() => location.reload(), 7000); return; }
+    } catch (e) { setCaption("I could not run the update.", "JARVIS:"); }
+    btn.disabled = false; btn.textContent = "Update";
+  });
 })();

@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 31   # shown in the top bar so you can see which update is running
+BUILD = 32   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
         """Live facts about how this JARVIS is set up, given to the model so it can describe itself truthfully."""
         return {
             "model": llm.model_name(), "model_on": llm.available(),
-            "voice_output": {"piper": "a local Piper voice (Alan, British male), free and offline", "kokoro": "a local neural voice (Kokoro, British male), free and offline", "mac": "the Mac's own built-in voice, free and offline", "eleven": "ElevenLabs", None: "off"}[voice.engine()],
+            "voice_output": {"piper": "a local Piper voice (Alan, British male), free and offline", "kokoro": "a local neural voice (Kokoro, British male), free and offline", "mac": "the Mac's own built-in voice, free and offline", "fish": "Fish Audio (cloud voice, free voice as backup)", "eleven": "ElevenLabs", None: "off"}[voice.engine()],
             "listening": "ElevenLabs transcription" if voice.available() else "typing only, no transcriber",
             "broker": ("%s account" % broker.mode()) if broker.configured() else "not connected",
             "data": "demo data" if data.is_demo() else "real data",

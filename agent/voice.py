@@ -14,6 +14,7 @@ from pathlib import Path
 
 API = os.environ.get("ELEVENLABS_BASE_URL", "https://api.elevenlabs.io").rstrip("/")  # override is for tests
 MAX_SPEAK_CHARS = 1500
+FISH_URL = os.environ.get("FISH_API_URL", "https://api.fish.audio").rstrip("/")  # override is for tests
 # The voice Desi chose. Override with ELEVENLABS_VOICE_ID in .env.
 DEFAULT_VOICE = "QYrOVogqhHWUzdZFXf0E"
 
@@ -41,6 +42,11 @@ def key():
 
 def available():
     return bool(key())
+
+
+def fish_ready():
+    """Fish Audio is used only when she has put both a key and a voice id in .env."""
+    return bool(os.environ.get("FISH_API_KEY", "").strip()) and bool(re.fullmatch(r"[A-Za-z0-9]{16,64}", os.environ.get("FISH_VOICE_ID", "").strip()))
 
 
 def _kpy():
@@ -146,7 +152,39 @@ def _kokoro_names():
 
 def speed_supported():
     """Engines that can speak faster or slower themselves, so the page can raise the pitch without rushing the words."""
-    return engine() in ("kokoro", "mac")
+    return engine() in ("kokoro", "mac", "fish")
+
+
+def _speak_fish(text, speed=None):
+    body = {"text": text[:MAX_SPEAK_CHARS], "reference_id": os.environ.get("FISH_VOICE_ID", "").strip(), "format": "mp3", "latency": "balanced"}
+    if speed and 0.5 <= float(speed) <= 2.0 and abs(float(speed) - 1.0) > 0.01:
+        body["prosody"] = {"speed": float(speed)}
+    req = urllib.request.Request(
+        FISH_URL + "/v1/tts", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": "Bearer " + os.environ.get("FISH_API_KEY", "").strip(), "Content-Type": "application/json",
+                 "model": os.environ.get("FISH_MODEL", "s2.1-pro-free").strip()})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            audio = r.read()
+    except urllib.error.HTTPError as e:
+        raise VoiceError("Fish Audio returned %d. %s" % (e.code, e.read()[:160].decode("utf-8", "replace")))
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise VoiceError("Could not reach Fish Audio: %s" % e)
+    if len(audio) < 200:
+        raise VoiceError("Fish Audio sent back no sound.")
+    return audio
+
+
+def _speak_local(text, voice_id, speed):
+    """The free voices on her own computer. Used when Fish Audio is out of credit or offline."""
+    for name, ready, fn in (("kokoro", kokoro_ready, lambda: _speak_kokoro(text, "", speed)), ("piper", piper_ready, lambda: _speak_piper(text)),
+                            ("mac", mac_ok, lambda: _speak_mac(text, "", speed))):
+        if ready():
+            try:
+                return fn(), "audio/wav"
+            except VoiceError:
+                continue
+    raise VoiceError("Fish Audio failed and no local voice is set up.")
 
 
 def _speak_kokoro(text, voice_id, speed=None):
@@ -172,10 +210,14 @@ def engine():
         return "eleven" if available() else None
     if want == "mac":
         return "mac" if mac_ok() else None
+    if want == "fish":
+        return "fish" if fish_ready() else None
     if want == "kokoro":
         return "kokoro" if kokoro_ready() else None
     if want == "piper":
         return "piper" if piper_ready() else None
+    if fish_ready():
+        return "fish"
     if kokoro_ready():
         return "kokoro"
     if piper_ready():
@@ -207,6 +249,8 @@ def _num(name, default):
 
 
 def default_voice():
+    if engine() == "fish":
+        return os.environ.get("FISH_VOICE_ID", "")
     if engine() == "piper":
         return PIPER_MODEL
     if engine() == "kokoro":
@@ -263,6 +307,8 @@ def _speak_mac(text, voice_id, speed=None):
 
 def list_voices():
     """Voices to audition, British ones first."""
+    if engine() == "fish":
+        return [{"id": os.environ.get("FISH_VOICE_ID", ""), "name": "Fish Audio voice", "accent": "", "gender": "male", "age": "", "description": "your Fish Audio voice", "preview": ""}]
     if engine() == "piper":
         return [{"id": PIPER_MODEL, "name": "Alan", "accent": "british", "gender": "male", "age": "", "description": "local Piper voice", "preview": ""}]
     if engine() == "kokoro":
@@ -293,6 +339,11 @@ def list_voices():
 
 def speak(text, voice_id=None, speed=None):
     """Text in, (audio bytes, content type) out. voice_id overrides the one in .env for this call."""
+    if engine() == "fish":
+        try:
+            return _speak_fish(text, speed), "audio/mpeg"
+        except VoiceError:
+            return _speak_local(text, voice_id, speed)   # out of credit or offline: the free voice covers it, JARVIS never goes silent
     if engine() == "piper":
         try:
             return _speak_piper(text), "audio/wav"

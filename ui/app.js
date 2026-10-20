@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 35;
+const UI_BUILD = 36;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -383,10 +383,19 @@ function renderCard(c) {
     }
     case "wellness": {
       const d = card("Wellness and ambience");
-      const q = row("\u201C" + c.quote + "\u201D", c.by);
-      d.appendChild(q);
-      [["Play focus stream", "play the focus stream"], ["Play spa relaxation", "play the spa relaxation stream"], ["Stop audio", "stop the audio"], ["Tea and hydration reminder", "tea reminder"]]
-        .forEach((b) => d.appendChild(row(b[0], "", () => ask(b[1]))));
+      d.appendChild(row("\u201C" + c.quote + "\u201D", c.by));
+      const note = el("div", "dim", window.Ambience && window.Ambience.playing() ? "Playing: " + (window.Ambience.playing() === "focus" ? "focus" : "spa relaxation") : "Made right here on your Mac, no internet needed.");
+      const go = (k, label) => { if (window.Ambience && window.Ambience.play(k)) note.textContent = "Playing: " + label; else note.textContent = "Your browser blocked the sound. Click the button again."; };
+      d.appendChild(row("Play focus sound", "Soft brown noise and a low hum", () => go("focus", "focus")));
+      d.appendChild(row("Play spa relaxation", "Slow ocean waves and gentle chimes", () => go("spa", "spa relaxation")));
+      d.appendChild(row("Stop", "", () => { if (window.Ambience) window.Ambience.stop(); note.textContent = "Stopped."; }));
+      const v = document.createElement("input");
+      v.type = "range"; v.min = "0"; v.max = "1"; v.step = "0.05"; v.value = String(window.Ambience ? window.Ambience.volume() : 0.6);
+      v.setAttribute("aria-label", "Ambience volume"); v.style.width = "100%"; v.style.accentColor = "var(--accent)";
+      v.addEventListener("input", () => { if (window.Ambience) window.Ambience.setVolume(parseFloat(v.value)); });
+      d.appendChild(el("div", "dim", "Volume")); d.appendChild(v);
+      d.appendChild(row("Tea and hydration reminder", "", () => { const say = "Madam Swain, might I suggest a fresh cup of Earl Grey and a glass of water before the opening bell."; setCaption(say, "JARVIS:"); speak(say); }));
+      d.appendChild(note);
       return d;
     }
     case "memory": {

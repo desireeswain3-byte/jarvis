@@ -86,7 +86,7 @@ TOOL_SCHEMAS = [
          "action": {"type": "string", "enum": ["status", "positions", "propose"]},
          "symbol": {"type": "string"}, "side": {"type": "string", "enum": ["buy", "sell"]}, "amount": {"type": "number"}}, "required": ["action"]}},
     {"name": "wellness",
-     "description": "Wellness and ambience. Actions: quote (the quote of the day), focus (play the focus stream), spa (play the spa relaxation stream), stop (stop the audio), tea (a tea and hydration reminder). Streams need an internet connection.",
+     "description": "Wellness and ambience. Actions: quote (the quote of the day), focus (play the focus stream), spa (play the spa relaxation stream), stop (stop the audio), tea (a tea and hydration reminder). The sounds are made on her Mac and need no internet.",
      "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["quote", "focus", "spa", "stop", "tea"]}}, "required": ["action"]}},
 ]
 
@@ -803,7 +803,7 @@ class Toolbox:
         say = "Opening the trading vault. It's sample data, nothing live." if a == "show" else "Demo mode. No broker is connected, and every figure is sample data."
         return {"say": say, "card": self._trading_card(), "facts": "Simulated vault shown. Equity %s, breaker %s, sweep %s. SAMPLE DATA, no broker." % (v["equity"], v["breaker"], v["sweep"]), "actions": []}
 
-    STREAMS = {"focus": "4AoDb3585wY", "spa": "1ZYbU82GVz4"}
+    STREAMS = {"focus": "focus", "spa": "spa"}   # made in the browser (ui/ambience.js), no internet needed
     QUOTE = {"text": "The individual has always had to struggle to keep from being overwhelmed by the tribe.", "by": "Friedrich Nietzsche"}
 
     def t_wellness(self, action="quote"):
@@ -811,7 +811,7 @@ class Toolbox:
         card = {"kind": "wellness", "quote": self.QUOTE["text"], "by": self.QUOTE["by"]}
         if a in self.STREAMS:
             name = "focus stream" if a == "focus" else "spa relaxation"
-            return {"say": "Playing the %s." % name, "card": card, "facts": "Started the %s audio on screen (needs internet)." % name,
+            return {"say": "Playing the %s." % name, "card": card, "facts": "Started the %s sound on screen. It is made locally and needs no internet." % name,
                     "actions": [{"type": "audio", "id": self.STREAMS[a]}]}
         if a == "stop":
             return {"say": "", "card": None, "facts": "Stopped the audio.", "actions": [{"type": "audio", "id": None}]}

@@ -298,13 +298,8 @@ async function runActions(actions) {
     else if (a.type === "close") closeScreen(a.what);
     else if (a.type === "audio") {
       const hold = document.getElementById("audio-holder");
-      hold.textContent = "";
-      if (a.id && /^[A-Za-z0-9_-]{6,20}$/.test(a.id)) {
-        const f = document.createElement("iframe");
-        f.width = 1; f.height = 1; f.setAttribute("allow", "autoplay"); f.setAttribute("frameborder", "0");
-        f.src = "https://www.youtube.com/embed/" + a.id + "?autoplay=1&loop=1&playlist=" + a.id;
-        hold.appendChild(f);
-      }
+      if (hold) hold.textContent = "";
+      if (window.Ambience) { if (a.id === "focus" || a.id === "spa") window.Ambience.play(a.id); else window.Ambience.stop(); }
     }
     else if (a.type === "history") { if (a.dir === "forward") viewer.forward(); else viewer.back(); }
   }

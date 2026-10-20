@@ -34,7 +34,7 @@ TOOL_SCHEMAS = [
      "description": "Day by day trading math. Gives what a daily percentage does to an account over a day, week, month, 3 months and a year, and the expected daily result from win rate, reward to risk, risk per trade and trades per day. Exact arithmetic, not a prediction.",
      "input_schema": {"type": "object", "properties": {"account": {"type": "number"}, "daily_percent": {"type": "number"}, "add_per_day": {"type": "number"}, "win_rate": {"type": "number"}, "reward_to_risk": {"type": "number"}, "risk_percent": {"type": "number"}, "trades_per_day": {"type": "number"}}, "required": ["account"]}},
     {"name": "autopilot",
-     "description": "Switch the practice-account autopilot on or off, or say what it is doing. It trades ONLY the practice account with fake money, never a live account, and only with strict limits (small size, daily buy limit, daily loss stop, profit guard, sell before the close). Use for 'turn on autopilot', 'let him trade the practice account', 'autopilot off', 'what is autopilot doing'. Never say it will make money.",
+     "description": "Switch autopilot on or off, or say what it is doing. It starts on the practice account with fake money. A live account stays locked until the practice autopilot finishes 20 trades and makes money overall, AND she adds AUTO_ALLOW_LIVE=yes. Guardrails: small size, a stop loss at the broker on every buy, the profit guard, stops for the day when today's losses are bigger than its wins, when the daily goal is reached, or at the daily loss limit, pauses itself if the system loses money over time, sells before the close. Use for 'turn on autopilot', 'let him trade', 'autopilot off', 'what is autopilot doing', 'can autopilot go live'. Never say it will make money.",
      "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off", "status"]}}, "required": ["action"]}},
     {"name": "check_messages",
      "description": "Read her most recent Apple Messages (texts and iMessages) on her Mac. Read only: you can never send, reply or delete. Optional contact filter by phone number, email or name fragment. Use for 'check my messages', 'did anyone text me', 'what did Mom say'. If the Mac has not allowed access, give her the steps from the result. Do not quote private messages back at length, summarise.",
@@ -430,11 +430,18 @@ class Toolbox:
             return {"say": msg, "card": None, "facts": msg}
         st = autopilot.status()
         if st["mode"] == "not connected":
-            msg = "Autopilot is off, because no practice account is connected yet."
-        elif st["mode"] != "paper":
-            msg = "Your account is set to live, so autopilot is locked off. It only runs on the practice account."
+            msg = "Autopilot is off, because no account is connected yet."
         else:
-            msg = "Autopilot is %s on the practice account. Buys today: %d%s." % ("on" if st["on"] else "off", st["buys_today"], (", holding " + ", ".join(st["holding"])) if st["holding"] else "")
+            where = "the practice account" if st["mode"] == "paper" else "your LIVE account"
+            msg = "Autopilot is %s on %s. Buys today: %d%s." % ("on" if st["on"] else "off", where, st["buys_today"], (", holding " + ", ".join(st["holding"])) if st["holding"] else "")
+            if st["done_for_day"]:
+                msg += " Done buying for today, because %s." % st["done_for_day"]
+            if st["paused"]:
+                msg += " It paused itself: %s." % st["paused"]
+            if st["mode"] != "paper" and not st["live_ready"][0]:
+                msg += " " + st["live_ready"][1]
+            elif st["mode"] == "paper":
+                msg += " Live autopilot is %s." % ("unlocked by your practice results" if st["graduated"] else "locked until the practice run passes (20 finished trades that made money overall)")
         return {"say": msg, "card": None, "facts": msg}
 
     def t_check_messages(self, contact="", limit=8):
@@ -717,7 +724,8 @@ class Toolbox:
                 card["shields"] = [{"name": "Per-order limit", "state": "$%.2f" % broker.max_order()},
                                    {"name": "Orders per day", "state": str(broker.max_orders_per_day())},
                                    {"name": "Profit guard", "state": ("ON: sells at %.0f%% giveback or %.0f%% loss" % (__import__("watch")._fnum("GUARD_GIVEBACK", 40.0), __import__("watch")._fnum("GUARD_MAX_LOSS", 3.0))) if __import__("watch").guard_enabled() else "OFF"},
-                                   {"name": "Autopilot", "state": ("ON (practice only)" if __import__("autopilot").is_on() else "OFF")},
+                                   {"name": "Autopilot", "state": ("ON (%s)" % ("practice" if broker.mode() == "paper" else "LIVE")) if __import__("autopilot").is_on() else "OFF"},
+                                   {"name": "Daily goal / loss stop", "state": "+$%.0f / -$%.0f" % (__import__("autopilot").limits()["daily_goal"], __import__("autopilot").limits()["daily_loss"])},
                                    {"name": "Circuit breaker", "state": "BLOCKS NEW ORDERS" if a["today"] <= -v["breaker"] else "ARMED"}]
             except broker.BrokerError as e:
                 card["note"] = "Broker not reachable, showing sample data. " + str(e)

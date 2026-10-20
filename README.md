@@ -103,6 +103,16 @@ The side panel has a Voice menu listing every voice on your ElevenLabs account, 
 ## Broker (optional)
 JARVIS can read an Alpaca account and line up orders. Practice (paper) is the default. The model can only propose an order; nothing is sent until you press Confirm on screen with a real click. Limits: a dollar cap per order, a cap on orders per day, and no new orders once the day's loss reaches the circuit breaker. Real money needs ALPACA_MODE=live and ALPACA_ALLOW_LIVE=yes in .env. This is software, not investment advice, and trading can lose money.
 
+### Autopilot
+Autopilot buys small, rule-based positions from the scanner's "worth a look" list. It starts on the practice account. A live account stays locked until the practice autopilot has finished 20 trades and made money overall, and you add `AUTO_ALLOW_LIVE=yes` to `.env`. Guardrails on every buy:
+- a stop loss at the broker (`GUARD_MAX_LOSS`, 3% by default), so it still sells if JARVIS or the Mac is asleep
+- the profit guard sells a winner that gives back too much of its best profit
+- it stops for the day when today's losses are bigger than today's wins, when the day is up `AUTO_DAILY_GOAL` ($10), or down `AUTO_DAILY_LOSS` ($5) or `AUTO_DAILY_LOSS_PCT` (2%)
+- it pauses itself if the system is losing money on average after 20 trades
+- it sells what it bought 10 minutes before the close
+
+Live keys go in with `python3 agent/setup_broker.py --live` and are stored separately from the practice keys.
+
 ## Free local voice
 
 JARVIS speaks with, in order: a local neural voice (Kokoro, British male) if you have set it up, then the Mac's own built-in voice, then ElevenLabs.

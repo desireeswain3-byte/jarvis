@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Private broker key setup. Run: python3 agent/setup_broker.py
+"""Private broker key setup.
+  Practice keys:  python3 agent/setup_broker.py
+  Live keys:      python3 agent/setup_broker.py --live   (saved separately; the account stays on practice until you switch it)
 
 Asks for the key ID and secret key (the secret is typed or pasted with nothing shown on screen), tests them
 with Alpaca, and saves them to .env only if the test passes. Nothing is printed back."""
@@ -41,10 +43,11 @@ def ask(label, hidden):
     return re.sub(r"\s+", "", raw or "").strip("\"'")
 
 
-def save(key, secret):
+def save(key, secret, live=False):
+    pre = "ALPACA_LIVE_" if live else "ALPACA_"
     lines = ENV.read_text(encoding="utf-8").splitlines() if ENV.exists() else []
-    lines = [ln for ln in lines if not re.match(r"\s*ALPACA_(KEY_ID|SECRET_KEY)\s*=", ln)]
-    lines += ["ALPACA_KEY_ID=" + key, "ALPACA_SECRET_KEY=" + secret]
+    lines = [ln for ln in lines if not re.match(r"\s*%s(KEY_ID|SECRET_KEY)\s*=" % pre, ln)]
+    lines += [pre + "KEY_ID=" + key, pre + "SECRET_KEY=" + secret]
     ENV.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:
         os.chmod(ENV, 0o600)
@@ -53,6 +56,8 @@ def save(key, secret):
 
 
 def main():
+    live = "--live" in sys.argv
+    print("Setting up your %s keys." % ("LIVE (real money)" if live else "PRACTICE (paper)"))
     print("This uses copy and paste from your clipboard, so you never type or paste into this window.")
     key = ask("Key ID", hidden=True)
     secret = ask("Secret key", hidden=True)
@@ -61,20 +66,33 @@ def main():
     if not key or not secret:
         print("\nOne of them was empty. Nothing was saved. Run this again.")
         return 1
-    if key.startswith("AK"):
-        print("\nThat key ID starts with AK, which is a LIVE account key. Use the Paper Trading keys. Nothing was saved.")
+    if key.startswith("AK") and not live:
+        print("\nThat key ID starts with AK, which is a LIVE account key. For practice, use the Paper Trading keys."
+              "\nTo save live keys, run: python3 agent/setup_broker.py --live\nNothing was saved.")
+        return 1
+    if key.startswith("PK") and live:
+        print("\nThat key ID starts with PK, which is a PRACTICE key. Use the keys from your live account. Nothing was saved.")
         return 1
     os.environ["ALPACA_KEY_ID"], os.environ["ALPACA_SECRET_KEY"] = key, secret
     os.environ["ALPACA_MODE"] = "paper"
     print("\nTesting with Alpaca...")
     try:
-        a = broker.account()
+        a = broker._req("GET", "/v2/account", host=broker.LIVE_URL if live else broker.PAPER_URL)
     except broker.BrokerError as e:
         print("It did not work: %s" % e)
-        print("Nothing was saved. If the keys look right, generate new Paper Trading keys and try again.")
+        print("Nothing was saved. If the keys look right, generate new keys and try again.")
         return 1
-    save(key, secret)
-    print("It works. Practice account equity: $%s. Keys saved." % format(a["equity"], ",.2f"))
+    save(key, secret, live)
+    try:
+        eq = float(a.get("equity") or 0)
+    except (TypeError, ValueError):
+        eq = 0.0
+    if live:
+        print("It works. Live account equity: $%s. Live keys saved separately." % format(eq, ",.2f"))
+        print("JARVIS still uses the PRACTICE account. Nothing trades with real money until you add ALPACA_MODE=live and ALPACA_ALLOW_LIVE=yes to .env,")
+        print("and autopilot stays off on live until your practice run passes and you add AUTO_ALLOW_LIVE=yes.")
+    else:
+        print("It works. Practice account equity: $%s. Keys saved." % format(eq, ",.2f"))
     if os.environ.get("JARVIS_NO_RESTART") != "1":
         plist = Path.home() / "Library/LaunchAgents/com.jarvis.plist"
         if plist.exists():

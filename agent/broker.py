@@ -24,11 +24,19 @@ class BrokerError(Exception):
 
 
 def _key():
+    if mode() == "live" and os.environ.get("ALPACA_LIVE_KEY_ID", "").strip():
+        return os.environ["ALPACA_LIVE_KEY_ID"].strip()
     return os.environ.get("ALPACA_KEY_ID", "").strip()
 
 
 def _secret():
+    if mode() == "live" and os.environ.get("ALPACA_LIVE_SECRET_KEY", "").strip():
+        return os.environ["ALPACA_LIVE_SECRET_KEY"].strip()
     return os.environ.get("ALPACA_SECRET_KEY", "").strip()
+
+
+def live_keys_saved():
+    return bool(os.environ.get("ALPACA_LIVE_KEY_ID", "").strip() and os.environ.get("ALPACA_LIVE_SECRET_KEY", "").strip())
 
 
 def configured():
@@ -104,7 +112,7 @@ def positions():
     out = []
     for p in _req("GET", "/v2/positions") or []:
         out.append({"symbol": str(p.get("symbol", "")), "qty": _f(p.get("qty")), "value": _f(p.get("market_value")), "pl": _f(p.get("unrealized_pl")),
-                    "cost": _f(p.get("cost_basis")) or (_f(p.get("market_value")) - _f(p.get("unrealized_pl")))})
+                    "entry": _f(p.get("avg_entry_price")), "cost": _f(p.get("cost_basis")) or (_f(p.get("market_value")) - _f(p.get("unrealized_pl")))})
     return out
 
 
@@ -163,8 +171,41 @@ def snapshots(symbols):
     return out
 
 
+def open_orders(symbol=None):
+    """Orders still waiting at the broker, optionally for one symbol."""
+    q = "/v2/orders?status=open&limit=100" + (("&symbols=" + urllib.parse.quote(str(symbol).upper(), safe="")) if symbol else "")
+    return [{"id": str(o.get("id", "")), "symbol": str(o.get("symbol", "")), "side": str(o.get("side", "")).lower(), "type": str(o.get("type", "")).lower(),
+             "stop": _f(o.get("stop_price")), "qty": _f(o.get("qty"))} for o in (_req("GET", q) or [])]
+
+
+def cancel_order(order_id):
+    return _req("DELETE", "/v2/orders/" + urllib.parse.quote(str(order_id), safe=""))
+
+
+def place_stop(symbol, qty, stop_price):
+    """A safety-net stop loss that sits AT THE BROKER, so it still sells if JARVIS or the Mac is asleep.
+    Fractional orders only allow time_in_force=day, so it lasts until today's close. It only ever sells shares already held."""
+    symbol = (symbol or "").upper().strip()
+    if not SYMBOL.match(symbol):
+        raise BrokerError("That is not a valid ticker symbol.")
+    q = float(qty)
+    if q <= 0:
+        raise BrokerError("Nothing to protect.")
+    px = float(stop_price)
+    price = ("%.2f" % px) if px >= 1 else ("%.4f" % px)
+    return _req("POST", "/v2/orders", {"symbol": symbol, "side": "sell", "type": "stop", "time_in_force": "day",
+                                       "qty": ("%.9f" % q).rstrip("0").rstrip("."), "stop_price": price})
+
+
 def close_position(symbol):
-    """Sell the whole position. Only ever reduces risk, so the profit guard may do it without asking."""
+    """Sell the whole position. Only ever reduces risk, so the profit guard may do it without asking.
+    Waiting orders for the symbol (like a safety-net stop) are cancelled first, because they hold the shares."""
+    for o in open_orders(symbol):
+        if o["symbol"] == str(symbol).upper():
+            try:
+                cancel_order(o["id"])
+            except BrokerError:
+                pass
     sym = urllib.parse.quote(str(symbol).upper(), safe="")
     return _req("DELETE", "/v2/positions/" + sym)
 

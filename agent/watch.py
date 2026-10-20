@@ -131,8 +131,10 @@ class Watcher:
                     self.scan()
                 if broker.configured() and autopilot.is_on():
                     from zoneinfo import ZoneInfo
+                    held = broker.positions()
+                    autopilot.protect(held, push)   # a stop loss at the broker under each new autopilot buy
                     if autopilot.flatten_due(datetime.datetime.now(ZoneInfo("America/New_York"))):
-                        autopilot.flatten(broker.positions(), push)
+                        autopilot.flatten(held, push)
                 if broker.configured():
                     self.check_broker()
                     self.day_summary()
@@ -204,6 +206,10 @@ class Watcher:
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(day)
         s = scorecard.fetch()
+        try:
+            autopilot.review(s, push)   # pauses a losing system, unlocks live after a passing practice run
+        except Exception:  # noqa: BLE001
+            pass
         if not s["today_trades"]:
             return
         label = "Practice account" if broker.mode() == "paper" else "Live account"
@@ -247,7 +253,7 @@ class Watcher:
                 self.flagged.add(key)
                 push("signal", signal_text(sym, d, rvol))
                 if d["pct"] > 0:
-                    autopilot.consider(sym, d, rvol, push)   # practice account only, and only if she switched it on
+                    autopilot.consider(sym, d, rvol, push)   # only if she switched it on, and live only after the practice run passed
 
     def sim_step(self):
         """Demo only: makes up a pipeline move so the feed can be seen working. Never touches any account."""

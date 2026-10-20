@@ -167,3 +167,31 @@ def close_position(symbol):
     """Sell the whole position. Only ever reduces risk, so the profit guard may do it without asking."""
     sym = urllib.parse.quote(str(symbol).upper(), safe="")
     return _req("DELETE", "/v2/positions/" + sym)
+
+
+def fills(days=90):
+    """Every fill on the account in the last few days, oldest first. Used by the scorecard to rebuild finished trades."""
+    import datetime as _dt
+    after = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=int(days))).strftime("%Y-%m-%dT%H:%M:%SZ")
+    out, token = [], None
+    for _ in range(20):   # at most 2,000 fills
+        q = "/v2/account/activities/FILL?direction=asc&page_size=100&after=" + after + (("&page_token=" + urllib.parse.quote(token, safe="")) if token else "")
+        page = _req("GET", q) or []
+        for a in page:
+            out.append({"id": str(a.get("id", "")), "time": str(a.get("transaction_time", "")), "symbol": str(a.get("symbol", "")),
+                        "side": str(a.get("side", "")).lower(), "qty": _f(a.get("qty")), "price": _f(a.get("price"))})
+        if len(page) < 100:
+            break
+        token = str(page[-1].get("id", ""))
+    return out
+
+
+def history(period="1M"):
+    """Account value and profit or loss at each day's close, from the broker."""
+    h = _req("GET", "/v2/account/portfolio/history?period=%s&timeframe=1D" % urllib.parse.quote(period, safe="")) or {}
+    out = []
+    for t, eq, pl in zip(h.get("timestamp") or [], h.get("equity") or [], h.get("profit_loss") or []):
+        if eq is None:
+            continue
+        out.append({"t": int(t), "equity": _f(eq), "pl": _f(pl)})
+    return out

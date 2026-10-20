@@ -40,6 +40,18 @@ input { width:100%; background:#000; color:var(--ink); border:1px solid var(--li
 #orb2 canvas { width:9rem; height:9rem; }
 #orb2 .lab { font:.65rem var(--mono); color:var(--accent); }
 .slim { font:.7rem var(--mono); color:var(--dim); }
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr)); gap:.7rem; }
+.tile { border:1px solid rgba(var(--glow),.18); border-radius:.6rem; padding:.6rem .75rem; }
+.tile .v { font-size:1.3rem; }
+#sc-verdict { margin:.8rem 0 .2rem; font:.85rem var(--mono); color:var(--ink); line-height:1.5; }
+.sc-cols { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin-top:.8rem; }
+@media (max-width:1000px) { .sc-cols { grid-template-columns:1fr; } }
+.bar { display:grid; grid-template-columns:5.5rem 1fr 5.5rem; align-items:center; gap:.5rem; font:.72rem var(--mono); padding:.2rem 0; }
+.bar .track { position:relative; height:.7rem; }
+.bar .track::before { content:""; position:absolute; left:50%; top:-.15rem; bottom:-.15rem; border-left:1px solid var(--line); }
+.bar .fill { position:absolute; top:0; height:100%; border-radius:2px; }
+.bar .fill.up { background:#4ade80; left:50%; } .bar .fill.neg { background:#f87171; right:50%; }
+.bar b { text-align:right; }
 </style>
 </head>
 <body>
@@ -68,6 +80,29 @@ input { width:100%; background:#000; color:var(--ink); border:1px solid var(--li
 
   <div class="panel c6"><h3>OPEN POSITIONS</h3><div id="pos" class="s">None</div></div>
   <div class="panel c6"><h3 id="shield-h">RISK SHIELDS</h3><div id="shields"></div></div>
+
+  <div class="panel c12" id="sc">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+      <h3 style="margin:0">PRACTICE SCORECARD</h3>
+      <button type="button" id="sc-use" title="Copy your real win rate and reward to risk into the Day Trader Math below">Use my numbers in the math below</button>
+    </div>
+    <div class="slim" style="margin:.3rem 0 .8rem">Built automatically from every fill on your account. A trade counts once you have bought and then sold all of it.</div>
+    <div class="tiles">
+      <div class="tile"><div class="k">FINISHED TRADES</div><div class="v" id="sc-n">...</div><div class="s" id="sc-wl"></div></div>
+      <div class="tile"><div class="k">WIN RATE</div><div class="v" id="sc-wr">...</div><div class="s" id="sc-need"></div></div>
+      <div class="tile"><div class="k">AVG WIN / AVG LOSS</div><div class="v" id="sc-avg" style="font-size:1.05rem">...</div><div class="s" id="sc-pay"></div></div>
+      <div class="tile"><div class="k">TOTAL SO FAR</div><div class="v" id="sc-tot">...</div><div class="s" id="sc-exp"></div></div>
+      <div class="tile"><div class="k">TODAY</div><div class="v" id="sc-today">...</div><div class="s" id="sc-tn"></div></div>
+      <div class="tile"><div class="k">GREEN / RED DAYS</div><div class="v" id="sc-days">...</div><div class="s" id="sc-streak"></div></div>
+      <div class="tile"><div class="k">STILL OPEN</div><div class="v" id="sc-open">...</div><div class="s" id="sc-opens"></div></div>
+    </div>
+    <div id="sc-verdict"></div>
+    <div class="sc-cols">
+      <div><h3>DAY BY DAY (FINISHED TRADES)</h3><div id="sc-bars" class="s">No finished trades yet.</div></div>
+      <div><h3>LAST TRADES</h3><table><thead><tr><th>CLOSED</th><th>SYMBOL</th><th>SIDE</th><th>RESULT</th></tr></thead><tbody id="sc-rows"></tbody></table></div>
+    </div>
+    <div class="hint">Every day after the close, JARVIS tells you the day's result out loud and sends it like your other alerts. These are your past results, not a prediction.</div>
+  </div>
 
   <div class="panel c8">
     <h3>ARCHITECT CONSOLE</h3>
@@ -159,6 +194,43 @@ function dcalc() {
 }
 ["da", "dadd", "drisk", "dn", "dwr", "drr"].forEach((i) => $("#" + i).addEventListener("input", dcalc)); dcalc();
 
+/* practice scorecard */
+let SC = null;
+const sm = (x) => (x < 0 ? "-" : "+") + money(Math.abs(x));
+const cls = (x) => (x < 0 ? "neg" : x > 0 ? "up" : "");
+async function scorecard() {
+  try {
+    const s = await (await fetch("/api/scorecard")).json();
+    if (!s.ok) { $("#sc-verdict").textContent = s.error || "Scorecard unavailable."; return; }
+    SC = s;
+    $("#sc-n").textContent = s.trades; $("#sc-wl").textContent = s.wins + " won, " + s.losses + " lost";
+    $("#sc-wr").textContent = s.trades ? s.win_rate.toFixed(0) + "%" : "-";
+    $("#sc-wr").className = "v " + (s.breakeven_win_rate == null ? "" : s.win_rate >= s.breakeven_win_rate ? "up" : "neg");
+    $("#sc-need").textContent = s.breakeven_win_rate == null ? "Need a loss and a win to compare" : "Need " + s.breakeven_win_rate.toFixed(0) + "% to break even";
+    $("#sc-avg").innerHTML = `<span class="up">${sm(s.avg_win)}</span> / <span class="neg">${sm(s.avg_loss)}</span>`;
+    $("#sc-pay").textContent = s.payoff ? "Wins are " + s.payoff.toFixed(2) + "x your losses" : "";
+    $("#sc-tot").textContent = sm(s.total); $("#sc-tot").className = "v " + cls(s.total);
+    $("#sc-exp").textContent = s.trades ? "About " + sm(s.expectancy) + " per trade" : "";
+    $("#sc-today").textContent = sm(s.today); $("#sc-today").className = "v " + cls(s.today);
+    $("#sc-tn").textContent = s.today_trades + " finished today";
+    $("#sc-days").textContent = s.green_days + " / " + s.red_days;
+    $("#sc-streak").textContent = s.streak && s.streak.n ? s.streak.n + " " + s.streak.kind + (s.streak.n === 1 ? "" : (s.streak.kind === "loss" ? "es" : "s")) + " in a row" : "";
+    $("#sc-open").textContent = sm(s.open_pl); $("#sc-open").className = "v " + cls(s.open_pl);
+    $("#sc-opens").textContent = s.open_symbols.length ? s.open_symbols.join(", ") + " not sold yet" : "Nothing open";
+    $("#sc-verdict").textContent = s.verdict;
+    const max = Math.max(1, ...s.days.map((d) => Math.abs(d.pl)));
+    $("#sc-bars").innerHTML = s.days.length ? s.days.slice().reverse().map((d) => `<div class="bar"><span class="s">${esc(new Date(d.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }))}</span><div class="track"><div class="fill ${d.pl < 0 ? "neg" : "up"}" style="width:${(Math.abs(d.pl) / max * 50).toFixed(1)}%"></div></div><b class="${cls(d.pl)}">${sm(d.pl)}</b></div>`).join("") : "No finished trades yet.";
+    $("#sc-rows").innerHTML = s.recent.length ? s.recent.map((t) => `<tr><td>${esc(new Date(t.closed).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</td><td class="sym">${esc(t.symbol)}</td><td>${esc(t.side)}</td><td class="${cls(t.pl)}">${sm(t.pl)} (${t.pct >= 0 ? "+" : ""}${t.pct.toFixed(2)}%)</td></tr>`).join("") : `<tr><td colspan="4" class="s">None yet</td></tr>`;
+  } catch (e) { $("#sc-verdict").textContent = "Could not load the scorecard."; }
+}
+$("#sc-use").addEventListener("click", () => {
+  if (!SC || !SC.trades) { $("#sc-verdict").textContent = "Finish a few trades first, then this copies your real numbers into the math below."; return; }
+  $("#dwr").value = Math.round(SC.win_rate);
+  if (SC.payoff) $("#drr").value = SC.payoff.toFixed(2);
+  dcalc(); $("#dsum").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+setInterval(scorecard, 60000); scorecard();
+
 /* alerts feed (the main JARVIS screen speaks them; this screen lists them) */
 let since = 0;
 async function feed() {
@@ -173,13 +245,13 @@ async function feed() {
         d.append(t, document.createTextNode(e.say));
         f.prepend(d);
       });
-      load();
+      load(); scorecard();
     } else since = Math.max(since, j.last || 0);
   } catch (e) { /* retry */ }
 }
 setInterval(feed, 8000); feed();
 setInterval(load, 30000); load();
-$("#refresh").addEventListener("click", load);
+$("#refresh").addEventListener("click", () => { load(); scorecard(); });
 
 /* architect console */
 $("#cmd").addEventListener("keydown", async (ev) => {

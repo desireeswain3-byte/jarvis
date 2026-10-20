@@ -135,6 +135,7 @@ class Watcher:
                         autopilot.flatten(broker.positions(), push)
                 if broker.configured():
                     self.check_broker()
+                    self.day_summary()
                 elif SIM_EVERY > 0 and time.time() - t_sim >= SIM_EVERY:
                     t_sim = time.time()
                     self.sim_step()
@@ -184,6 +185,30 @@ class Watcher:
         elif abs(acct["today"] - self.last_pl) >= step:
             push("pl", "%s is %s %s since your last update." % (label, "up" if acct["today"] > self.last_pl else "down", _money(acct["today"] - self.last_pl)))
             self.last_pl = acct["today"]
+
+    def day_summary(self):
+        """Once each trading day, a few minutes after the close: today's result from the scorecard, said out loud and sent like other alerts."""
+        from pathlib import Path
+        from zoneinfo import ZoneInfo
+        import scorecard
+        now = datetime.datetime.now(ZoneInfo("America/New_York"))
+        if now.weekday() >= 5 or now.hour * 60 + now.minute < 16 * 60 + 5:
+            return
+        day = now.strftime("%Y-%m-%d")
+        mark = Path(__file__).resolve().parent.parent / "memory" / "trading" / ".summary_day"
+        try:
+            if mark.read_text().strip() == day:
+                return
+        except OSError:
+            pass
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(day)
+        s = scorecard.fetch()
+        if not s["today_trades"]:
+            return
+        label = "Practice account" if broker.mode() == "paper" else "Live account"
+        push("summary", "%s, end of day: %s %s over %d finished trade%s. %s" % (
+            label, "up" if s["today"] >= 0 else "down", _money(s["today"]), s["today_trades"], "" if s["today_trades"] == 1 else "s", scorecard.spoken(s)))
 
     def guard(self, positions, label):
         """Profit guard: sells a position when it hands back too much of its best profit, or falls past the loss limit. It never buys."""

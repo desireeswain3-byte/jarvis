@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 34   # shown in the top bar so you can see which update is running
+BUILD = 35   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -120,6 +120,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"ok": False, "error": str(e), "rows": [], "open": _w.market_open()})
             rows = [{"symbol": k, "price": v["price"], "pct": v["pct"], "high": v["high"], "low": v["low"], "vol": v["vol"]} for k, v in snaps.items()]
             return self.send_json(200, {"ok": True, "rows": rows, "open": _w.market_open(), "index": ["SPY", "QQQ", "DIA", "IWM"]})
+        if u.path == "/api/scorecard":
+            import scorecard as _sc
+            if not broker.configured():
+                return self.send_json(200, {"ok": False, "error": "Connect the practice account (Alpaca keys in .env) and the scorecard fills itself in from your trades."})
+            try:
+                return self.send_json(200, dict(_sc.fetch(), ok=True))
+            except broker.BrokerError as e:
+                return self.send_json(200, {"ok": False, "error": str(e)})
         if u.path == "/api/events":
             try: n = int((q.get("since") or ["0"])[0])
             except ValueError: n = 0

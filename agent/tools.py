@@ -60,6 +60,9 @@ TOOL_SCHEMAS = [
     {"name": "review_journal",
      "description": "Review the trading journal: number of trades, win rate, average win and loss in R, expectancy, and which setups work. Use for 'how am I doing' or a weekly review.",
      "input_schema": {"type": "object", "properties": {}}},
+    {"name": "scorecard",
+     "description": "The automatic practice scorecard, built from the broker's own fills: finished trades, win rate, average win and loss in dollars, the win rate needed to break even, total and today's result, green and red days, streak. Use for 'how am I doing', 'my win rate', 'scorecard', 'how did I do today'. Arithmetic on past trades, not a prediction.",
+     "input_schema": {"type": "object", "properties": {}}},
     {"name": "read_inbox",
      "description": "Read-only. Who wrote, about what, and whether they already exist in the user's files.",
      "input_schema": {"type": "object", "properties": {}}},
@@ -123,6 +126,7 @@ VIEWS = [
     (re.compile(r"^(?:inbox|emails?|mail|unread(?: mail| emails?)?|messages)$"), "read_inbox"),
     (re.compile(r"^(?:memory|memories|what you(?:'ve| have)? remembered|remembered(?: facts)?)$"), "memory"),
     (re.compile(r"^(?:the )?(?:trading(?: vault| page| dashboard)?|trade pipeline|trades?|vault|equity|circuit breaker|cash sweep|risk shields?)$"), "trading"),
+    (re.compile(r"^(?:my |the |practice )*(?:score ?card|win rate|results?|stats)$|^how am i doing$|^how did i do(?: today)?$"), "scorecard"),
     (re.compile(r"^(?:the )?(?:wellness|ambience|ambiance|quote(?: of the day)?|quotes?)$"), "wellness"),
     (re.compile(r"^(?:all )?(?:invoices?|ledger|payments?|money|outstanding|what(?:'s| is) owed|who owes me)$"), "invoices"),
 ]
@@ -584,6 +588,26 @@ class Toolbox:
         note = " Under 30 trades is too few to trust these numbers." if len(rows) < 30 else ""
         return {"say": "Expectancy is %+.2f R per trade over %d trades.%s" % (exp, len(rows), note), "card": {"kind": "memory", "files": rows_card},
                 "facts": "Journal review: " + "; ".join(lines) + ". Setups: " + "; ".join("%s %d trades %+.2fR" % (k, len(v), sum(v)) for k, v in by.items()) + "." + note}
+
+    def t_scorecard(self):
+        import broker as _b
+        import scorecard as _sc
+        if not _b.configured():
+            return {"say": "The scorecard needs the practice account connected first.", "card": None, "facts": "no broker keys"}
+        try:
+            s = _sc.fetch()
+        except _b.BrokerError as e:
+            return {"say": "I could not get your trades from the broker. " + str(e), "card": None, "facts": str(e)}
+        m = lambda x: ("+" if x >= 0 else "-") + "$" + format(abs(x), ",.2f")
+        rows = [{"file": "Finished trades", "text": "%d (%d won, %d lost)" % (s["trades"], s["wins"], s["losses"])},
+                {"file": "Win rate", "text": "%.0f%%" % s["win_rate"] + ("" if s["breakeven_win_rate"] is None else ", need %.0f%% to break even" % s["breakeven_win_rate"])},
+                {"file": "Average win / loss", "text": "%s / %s" % (m(s["avg_win"]), m(s["avg_loss"]))},
+                {"file": "Total so far", "text": m(s["total"])},
+                {"file": "Today", "text": "%s over %d trade%s" % (m(s["today"]), s["today_trades"], "" if s["today_trades"] == 1 else "s")},
+                {"file": "Green / red days", "text": "%d / %d" % (s["green_days"], s["red_days"])},
+                {"file": "Verdict", "text": s["verdict"]}]
+        return {"say": _sc.spoken(s), "card": {"kind": "memory", "files": rows},
+                "facts": "Scorecard (%s account, from broker fills): %s" % (s["mode"], {k: s[k] for k in ("trades", "wins", "losses", "win_rate", "avg_win", "avg_loss", "breakeven_win_rate", "expectancy", "total", "today", "today_trades", "green_days", "red_days", "streak", "open_pl")}) + ". " + s["verdict"]}
 
     # ---------- 6. plan_day ----------
     def t_plan_day(self):

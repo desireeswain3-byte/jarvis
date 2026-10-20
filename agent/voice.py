@@ -156,7 +156,7 @@ def speed_supported():
 
 
 def _speak_fish(text, speed=None):
-    body = {"text": text[:MAX_SPEAK_CHARS], "reference_id": os.environ.get("FISH_VOICE_ID", "").strip(), "format": "mp3", "latency": os.environ.get("FISH_LATENCY", "normal").strip() or "normal"}
+    body = {"text": text[:MAX_SPEAK_CHARS], "reference_id": os.environ.get("FISH_VOICE_ID", "").strip(), "format": "mp3", "latency": os.environ.get("FISH_LATENCY", "balanced").strip() or "balanced"}
     if speed and 0.5 <= float(speed) <= 2.0 and abs(float(speed) - 1.0) > 0.01:
         body["prosody"] = {"speed": float(speed)}
     req = urllib.request.Request(

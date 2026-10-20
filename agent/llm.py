@@ -65,13 +65,17 @@ def build_system(wiring=None):
     mem = memory.listing()[:30]
     if mem:
         parts.append("## Remembered facts (memory/)\n" + "\n".join("- %s: %s" % (m["file"], m["text"]) for m in mem))
+    steady = "\n\n".join(parts)
+    parts = []
     if wiring:
         parts.append("## Your live setup right now\n" + "\n".join("- %s: %s" % (k, v) for k, v in wiring.items()))
     now = datetime.datetime.now()
     name, greet = part_of_day(now)
     parts.append("## Context\nToday is %s. The local time is %s, which is %s. Mode: %s.\nGreeting for now: \"%s, Madam Swain\". If she is going to bed or signing off, say \"Good night, Madam Swain\"." % (
         now.strftime("%A %d %B %Y"), now.strftime("%I:%M %p").lstrip("0"), name, "demo data, invented" if data.is_demo() else "real data", greet))
-    return "\n\n".join(parts)
+    # The steady part (instructions, tools, memory) is cached by the model for a few minutes, so it is not re-read on every question.
+    # The time and live setup change, so they come after the cache point.
+    return [{"type": "text", "text": steady, "cache_control": {"type": "ephemeral"}}, {"type": "text", "text": "\n\n".join(parts)}]
 
 
 def _post(body):

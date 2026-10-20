@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 39;
+const UI_BUILD = 40;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -715,6 +715,20 @@ async function ask(text, opts) {
   await speak(out.reply);
 }
 let chosenVoice = "";
+/* Split a reply into pieces so he starts talking after the first sentence instead of after the whole reply. */
+function speechParts(text) {
+  const sents = String(text).replace(/\s+/g, " ").trim().match(/.+?(?:[.!?]+["')\]]*(?=\s|$)|$)\s*/g) || [String(text)];
+  const out = [];
+  for (const raw of sents) {
+    const s = raw.trim();
+    if (!s) continue;
+    const last = out[out.length - 1];
+    // first piece: one sentence (merge a tiny opener like "Certainly." with the next); later pieces: up to about 220 characters
+    if (last !== undefined && ((out.length === 1 && last.length < 25) || (out.length > 1 && last.length + s.length < 220))) out[out.length - 1] = last + " " + s;
+    else out.push(s);
+  }
+  return out.length ? out : [String(text)];
+}
 async function speak(text) {
   const token = ++speakToken;
   if (!text || !String(text).trim()) { resumeListening(); return; }   // silent commands: scroll, move, close
@@ -723,34 +737,46 @@ async function speak(text) {
     resumeListening();
     return;
   }
-  let url;
-  try {
-    const r = await fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, voice: chosenVoice, speed: engineSpeed() }) });
+  const parts = speechParts(text);
+  const made = [];
+  const audioFor = (i) => made[i] || (made[i] = (async () => {
+    const r = await fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: parts[i], voice: chosenVoice, speed: engineSpeed() }) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText); }
     speedApplied = r.headers.get("X-Speed-Applied") === "1";
-    url = URL.createObjectURL(await r.blob());
-  } catch (e) {
-    alertBar("Voice output failed.", e.message);
-    resumeListening();
-    return;
-  }
-  if (token !== speakToken) { URL.revokeObjectURL(url); return; }
-  // Deaf while speaking, or the mic transcribes its own voice through the speakers.
-  pauseRecorder();
-  setState("speaking");
-  audioEl.src = url;
-  audioEl.onended = () => {
+    return URL.createObjectURL(await r.blob());
+  })());
+  audioFor(0);
+  if (parts.length > 1) audioFor(1);   // the second piece is made while the first one plays
+  for (let i = 0; i < parts.length; i++) {
+    let url;
+    try { url = await audioFor(i); }
+    catch (e) {
+      if (i === 0) alertBar("Voice output failed.", e.message);
+      break;
+    }
+    if (token !== speakToken) { URL.revokeObjectURL(url); made.slice(i + 1).forEach((p) => p && p.then((u) => URL.revokeObjectURL(u)).catch(() => {})); return; }
+    if (i + 2 < parts.length) audioFor(i + 2);
+    // Deaf while speaking, or the mic transcribes its own voice through the speakers.
+    pauseRecorder();
+    setState("speaking");
+    audioEl.src = url;
+    applyRate();
+    const done = new Promise((res) => { audioEl.onended = res; audioEl.onpause = res; });
+    try { await audioEl.play(); }
+    catch (e) {
+      // Blocked: keep the rest of the reply and play it on the next click, so nothing is lost.
+      URL.revokeObjectURL(url);
+      const rest = parts.slice(i).join(" ");
+      pendingPlay = () => { speak(rest); };
+      alertBar("The browser blocked audio playback.", "Click anywhere on the page and the reply will play.");
+      resumeListening();
+      return;
+    }
+    await done;
     URL.revokeObjectURL(url);
-    if (token === speakToken) setTimeout(() => { if (state === "speaking") resumeListening(); }, 350);
-  };
-  applyRate();
-  try { await audioEl.play(); }
-  catch (e) {
-    // Blocked: keep the reply and play it on the next click, so nothing is lost.
-    pendingPlay = () => { audioEl.play().catch(() => resumeListening()); };
-    alertBar("The browser blocked audio playback.", "Click anywhere on the page and the reply will play.");
-    resumeListening();
+    if (token !== speakToken) return;
   }
+  if (token === speakToken) setTimeout(() => { if (state === "speaking") resumeListening(); }, 350);
 }
 function bargeIn() {
   speakToken++;

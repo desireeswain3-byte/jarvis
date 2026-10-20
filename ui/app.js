@@ -71,13 +71,41 @@ function setState(s) {
   document.body.classList.add("state-" + s);
   $("#state-label").textContent = s.toUpperCase();
 }
+/* captions: "side" puts every line in a scrolling panel off to the side, "center" shows them under the orb, "off" hides them */
+let captionMode = "side";
+try { const m = localStorage.getItem("jarvis.captions"); if (m === "side" || m === "center" || m === "off") captionMode = m; } catch (e) { /* storage unavailable */ }
 function setCaption(text, who) {
-  tellOverlay({ caption: text || "" });
+  tellOverlay({ caption: captionMode === "off" ? "" : (text || "") });
   const c = $("#caption");
   c.textContent = "";
   if (who) c.appendChild(el("span", "you", who + " "));
-  c.appendChild(document.createTextNode(text));
+  c.appendChild(document.createTextNode(text || ""));
+  const now = $("#t-now");
+  if (!who) { if (now) now.textContent = text || ""; return; }
+  if (now) now.textContent = "";
+  const log = $("#t-log");
+  if (!log || !text) return;
+  const line = el("div", "t-line " + (who === "You:" ? "t-you" : "t-him"));
+  line.appendChild(el("span", "t-who", who === "You:" ? "You" : "JARVIS"));
+  line.appendChild(document.createTextNode(text));
+  log.appendChild(line);
+  while (log.children.length > 60) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
 }
+(function () {
+  const btn = $("#b-cc"), NEXT = { side: "off", off: "center", center: "side" }, LABEL = { side: "Words: Side", off: "Words: Off", center: "Words: Center" };
+  function apply() {
+    ["side", "center", "off"].forEach((m) => document.body.classList.toggle("cc-" + m, captionMode === m));
+    $("#transcript").hidden = captionMode !== "side";
+    if (btn) btn.textContent = LABEL[captionMode];
+    if (captionMode === "off") tellOverlay({ caption: "" });
+    try { localStorage.setItem("jarvis.captions", captionMode); } catch (e) { /* ignore */ }
+  }
+  if (btn) btn.addEventListener("click", () => { captionMode = NEXT[captionMode]; apply(); });
+  const clr = $("#t-clear");
+  if (clr) clr.addEventListener("click", () => { $("#t-log").textContent = ""; });
+  apply();
+})();
 
 /* ---------- status badges ---------- */
 function badge(id, text, cls) {
@@ -85,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 33;
+const UI_BUILD = 34;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;

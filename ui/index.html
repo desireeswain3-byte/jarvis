@@ -19,6 +19,7 @@
     <span id="b-model" class="badge">...</span>
     <span id="b-voice" class="badge">...</span>
     <span id="b-build" class="badge">BUILD ?</span>
+    <button type="button" id="b-cc" class="badge" title="Where JARVIS's words show: in a side panel, under him, or not at all">Words: Side</button>
     <button type="button" id="b-comp" class="badge" title="Switch between the clean one-on-one view and the full view">Full view</button>
   </div>
 </header>
@@ -67,6 +68,11 @@
 <aside id="hud-right" aria-hidden="true"></aside>
 <section id="tray"></section>
 <div id="caption"></div>
+<aside id="transcript" aria-label="What was said" hidden>
+  <div id="t-head"><h5>TRANSCRIPT</h5><button type="button" id="t-clear" title="Clear the list">Clear</button></div>
+  <div id="t-log" aria-live="polite"></div>
+  <div id="t-now" class="dim"></div>
+</aside>
 
 <form id="askbar" autocomplete="off">
   <input id="ask" type="text" placeholder="Ask" aria-label="Ask JARVIS">

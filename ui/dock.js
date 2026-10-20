@@ -12,7 +12,7 @@ function makeDockable(el, opts) {
   const SLIDE = 'left .28s cubic-bezier(.2,.9,.2,1), top .28s cubic-bezier(.2,.9,.2,1)';
   const GLIDE_MS = 380;
   const GLIDE = 'left ' + GLIDE_MS + 'ms cubic-bezier(.22,.8,.2,1), top ' + GLIDE_MS + 'ms cubic-bezier(.22,.8,.2,1)';
-  const AVOID = opts.avoid || '.panel, .card, #askbar, #topbar, #caption, #viewer';
+  const AVOID = opts.avoid || '.panel, .card, #askbar, #topbar, #caption, #transcript, #viewer';
   let side = null, drag = null, home = null, glideTimer = 0;
   const r0 = el.getBoundingClientRect();
   const restGap = { r: Math.max(0, window.innerWidth - r0.right), b: Math.max(0, window.innerHeight - r0.bottom) }; // where the page put it: the default home

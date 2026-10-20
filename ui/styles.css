@@ -183,7 +183,7 @@ body.state-speaking #b-mic { background: var(--danger); }
 #b-comp { pointer-events: auto; cursor: pointer; font: inherit; }
 #b-comp:hover { color: var(--accent); }
 body.companion #left, body.companion #right, body.companion #topbar .brand { display: none; }
-body.companion #topbar .badges > .badge:not(#b-comp) { display: none; }
+body.companion #topbar .badges > .badge:not(#b-comp):not(#b-cc) { display: none; }
 body.companion #graph, body.companion #graph-labels { opacity: 0.22; transition: opacity 0.6s; }
 body.companion #orb { width: 17rem; }
 body.companion #orb canvas { width: 17rem; height: 17rem; }
@@ -221,3 +221,25 @@ body.companion #hud-right { right: 1.6rem; text-align: right; }
 #right { max-height: calc(100vh - 4rem - 15rem); overflow-y: auto; }
 #left { max-height: calc(100vh - 4rem - 1.5rem); overflow-y: auto; }
 @media (max-width: 1500px) { body:not(.companion) #caption { bottom: 9.25rem; } }
+
+/* captions: side panel, under the orb, or off (the Words button in the top bar) */
+#b-cc { pointer-events: auto; cursor: pointer; font: inherit; }
+#b-cc:hover { color: var(--accent); }
+body.cc-side #caption, body.cc-off #caption { display: none; }
+#transcript { position: fixed; left: 1rem; bottom: 1rem; width: 20rem; max-height: 38vh; display: flex; flex-direction: column; background: var(--panel); border: 0.0625rem solid var(--line); border-radius: 0.75rem; padding: 0.6rem 0.75rem; z-index: 11; box-shadow: 0 0 1.375rem rgba(var(--glow), 0.12); }
+#transcript[hidden] { display: none; }
+#t-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; }
+#t-head h5 { margin: 0; font: 700 0.625rem var(--mono); letter-spacing: 0.2em; color: var(--accent); }
+#t-clear { font: 600 0.625rem var(--mono); background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0.2rem 0.3rem; }
+#t-clear:hover { color: var(--accent); }
+#t-log { overflow-y: auto; flex: 1 1 auto; min-height: 0; font-size: 0.875rem; line-height: 1.45; padding-right: 0.25rem; }
+.t-line { padding: 0.35rem 0; border-bottom: 0.0625rem solid rgba(var(--glow), 0.12); overflow-wrap: anywhere; }
+.t-line:last-child { border-bottom: 0; }
+.t-who { display: block; font: 700 0.5625rem var(--mono); letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 0.1rem; }
+.t-you { color: var(--dim); } .t-you .t-who { color: var(--dim); }
+.t-him { color: var(--ink); } .t-him .t-who { color: var(--accent); }
+#t-now { font: 0.6875rem var(--mono); letter-spacing: 0.08em; min-height: 0.9rem; margin-top: 0.3rem; }
+body:not(.companion) #transcript { bottom: 10rem; max-height: 30vh; width: 18.75rem; }
+body.cc-side:not(.companion) #left { max-height: calc(100vh - 4rem - 12rem - 30vh); bottom: auto; }
+body.companion #transcript { left: 1.6rem; bottom: 1.5rem; width: 22rem; max-height: 42vh; }
+@media (max-width: 1100px) { #transcript, body.companion #transcript { width: calc(100vw - 2rem); max-height: 24vh; bottom: 7rem; } }

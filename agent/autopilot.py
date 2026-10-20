@@ -278,6 +278,7 @@ def consider(sym, d, rvol, push, now=None):
         broker.place(sym, "buy", size)
         today = now.date().isoformat()
         if st.get("day") != today:
+            st["leftover"] = sorted(set(st.get("leftover", [])) | (set(st.get("bought", [])) - set(st.get("flattened", []))))
             st["day"], st["count"], st["bought"], st["stops"], st["flattened"] = today, 0, [], {}, []
         st["count"] = st.get("count", 0) + 1
         st["bought"] = sorted(set(st.get("bought", [])) | {sym})
@@ -337,6 +338,36 @@ def record_close(pos, reason, journal_path=None):
             f.write(json.dumps(rec) + "\n")
     except Exception:
         pass
+
+
+def sell_leftovers(positions, push, now=None):
+    """If the computer slept through the close, sell anything autopilot bought on an earlier day, once the market is open.
+    Only reduces risk, and never touches positions she opened herself."""
+    st = _load()
+    today = datetime.date.today().isoformat()
+    old = set(st.get("leftover", []))
+    if st.get("day") and st.get("day") != today:
+        old |= set(st.get("bought", [])) - set(st.get("flattened", []))
+    if not old:
+        return
+    held = {p["symbol"]: p for p in positions}
+    for sym in sorted(old):
+        p = held.get(sym)
+        if p:
+            try:
+                broker.close_position(sym)
+                record_close(p, "left over from an earlier day, sold at the open")
+                push("autopilot", "Autopilot, %s: %s was still held from an earlier day, probably because the computer was asleep at the close, so I sold it. Result about %s$%.2f." % (
+                    _label(), sym, "-" if p["pl"] < 0 else "+", abs(p["pl"])))
+            except Exception as e:  # noqa: BLE001
+                push("alert", "Autopilot tried to sell %s, left over from an earlier day, but failed: %s. Please check it." % (sym, str(e)[:100]))
+                continue
+        old.discard(sym)
+    st = _load()
+    st["leftover"] = sorted(old)
+    if st.get("day") != today:
+        st["flattened"] = sorted(set(st.get("flattened", [])) | set(st.get("bought", [])))
+    _save(st)
 
 
 def flatten_due(now):

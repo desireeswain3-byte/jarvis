@@ -132,6 +132,8 @@ class Watcher:
                 if broker.configured() and autopilot.is_on():
                     from zoneinfo import ZoneInfo
                     held = broker.positions()
+                    if market_open():
+                        autopilot.sell_leftovers(held, push)   # anything still held from a day the Mac slept through the close
                     autopilot.protect(held, push)   # a stop loss at the broker under each new autopilot buy
                     if autopilot.flatten_due(datetime.datetime.now(ZoneInfo("America/New_York"))):
                         autopilot.flatten(held, push)

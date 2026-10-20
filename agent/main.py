@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 38   # shown in the top bar so you can see which update is running
+BUILD = 39   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -210,6 +210,13 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get("X-Jarvis") != "1":
                     return self.send_json(403, {"ok": False, "error": "not allowed"})
                 return self.send_json(200, run_update())
+            if path == "/api/learn":
+                # Study a pasted transcript. Needs the same header as Update, so a random website cannot send one.
+                if self.headers.get("X-Jarvis") != "1":
+                    return self.send_json(403, {"ok": False, "error": "not allowed"})
+                import research
+                body = json.loads(raw or b"{}")
+                return self.send_json(200, research.learn(S.toolbox, body.get("text", ""), body.get("source", "")))
             if path == "/api/restart":
                 self.send_json(200, {"ok": True})
                 threading.Timer(0.5, lambda: os.execv(sys.executable, [sys.executable] + sys.argv)).start()

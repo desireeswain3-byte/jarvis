@@ -85,6 +85,7 @@
   <button type="button" id="b-desk" title="Open the Desk screen (brief, plan, notes) on another monitor">Desk</button>
   <button type="button" id="b-wellness" title="Quote, focus and spa audio, tea reminder">Wellness</button>
   <button type="button" id="b-memory" title="What I have remembered">Memory</button>
+  <button type="button" id="b-teach" title="Paste a video transcript or article for JARVIS to study and remember">Teach</button>
   <button type="button" id="b-dock" title="Slide the orb to the side">Dock</button>
   <button type="button" id="b-update" title="Get the newest JARVIS from GitHub">Update</button>
   <button type="button" id="b-layer" title="Which layer JARVIS sits on: front, middle or back">Layer: Front</button>
@@ -93,6 +94,14 @@
   <button type="button" id="b-hands" title="Hand tracking: pinch to grab">Hands</button>
   <button type="button" id="b-sight" title="Let JARVIS see your screen. Chrome asks first.">Sight</button>
 </form>
+
+<section id="teach" class="panel" hidden aria-label="Teach JARVIS">
+  <h2>TEACH JARVIS</h2>
+  <p class="dim">Paste a whole transcript or article. He keeps the full text and saves every concrete trading rule as a lesson. Or paste a YouTube link and he reads the captions himself.</p>
+  <input id="teach-source" type="text" placeholder="Where it is from (for example: Trades by Sci, VWAP video)" aria-label="Source">
+  <textarea id="teach-text" placeholder="Paste the transcript or a YouTube link here" aria-label="Transcript"></textarea>
+  <div class="teach-row"><span id="teach-count" class="dim">0 characters</span><button type="button" id="teach-cancel">Close</button><button type="button" id="teach-go">Learn it</button></div>
+</section>
 
 <div id="orb" title="Drag me to a screen edge to dock"><svg id="orb-ring" viewBox="-100 -100 200 200" aria-hidden="true"></svg><canvas id="reactor" width="300" height="300"></canvas><div id="state-label">IDLE</div></div>
 <video id="handcam" playsinline muted></video>

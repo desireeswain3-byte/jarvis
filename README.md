@@ -132,3 +132,7 @@ JARVIS then floats above everything. Clicks pass through everywhere except on th
 
 ---
 Copyright (c) 2026 Desiree Swain. All rights reserved. See LICENSE. Do not copy or reuse without written permission.
+
+## Research and learning
+- **On his own:** every weekday before the open he checks the market, reads market news and studies one new video from `RESEARCH_TEACHERS`, then saves a note in `memory/trading/research/` and tells you the highlights. After the close he reviews the day's practice trades and suggests one rule change. He never changes autopilot's rules himself. Say "do your research" to run it now.
+- **Teach button:** paste a transcript or article of any length (or a YouTube link). He keeps the full text in `memory/trading/transcripts/` and saves each concrete rule as a lesson in `memory/trading/lessons/`. All of it stays on your Mac and is never uploaded.

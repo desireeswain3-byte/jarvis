@@ -8,6 +8,7 @@ import time
 import autopilot
 import broker
 import notify
+import research
 
 LOCK = threading.Lock()
 EVENTS = []          # newest last; each has an increasing id
@@ -125,6 +126,10 @@ class Watcher:
     def loop(self):
         t_sim = time.time()
         while not self.stop:
+            try:
+                research.tick(self.tb, push)   # morning research before the open, evening review after the close
+            except Exception:  # noqa: BLE001
+                pass
             try:
                 if broker.configured() and market_open() and time.time() - self.t_scan >= 90:
                     self.t_scan = time.time()

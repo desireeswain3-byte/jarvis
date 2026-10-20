@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 38;
+const UI_BUILD = 39;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -804,6 +804,35 @@ $("#b-memory").addEventListener("click", async () => {
     afterShow();
   } catch (e) { alertBar("Could not read memory.", e.message); }
 });
+/* ---------- Teach: paste a transcript (any length) or a YouTube link for JARVIS to study ---------- */
+(function () {
+  const box = $("#teach"), txt = $("#teach-text"), src = $("#teach-source"), go = $("#teach-go"), count = $("#teach-count");
+  if (!box) return;
+  const isLink = (t) => /^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)\/\S+$/i.test(t.trim());
+  const upd = () => { const n = txt.value.length; count.textContent = isLink(txt.value) ? "YouTube link: he will read the captions" : n.toLocaleString() + " characters"; };
+  txt.addEventListener("input", upd);
+  $("#b-teach").addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) txt.focus(); });
+  $("#teach-cancel").addEventListener("click", () => { box.hidden = true; });
+  go.addEventListener("click", async () => {
+    const text = txt.value.trim();
+    if (!text) { txt.focus(); return; }
+    go.disabled = true; go.textContent = "Studying...";
+    setCaption("Studying it now. Long transcripts take a minute or two.", "JARVIS:");
+    try {
+      let j;
+      if (isLink(text)) {
+        await ask("Learn this whole video and save its lessons: " + text);
+        j = { ok: true, say: "" };
+      } else {
+        const r = await fetch("/api/learn", { method: "POST", headers: { "Content-Type": "application/json", "X-Jarvis": "1" }, body: JSON.stringify({ text, source: src.value.trim() }) });
+        j = await r.json();
+      }
+      if (j.say) { setCaption(j.say, "JARVIS:"); speak(j.say); }
+      if (j.ok) { txt.value = ""; src.value = ""; upd(); box.hidden = true; loadGraph().catch(() => {}); }
+    } catch (e) { alertBar("I could not study that.", e.message); }
+    go.disabled = false; go.textContent = "Learn it";
+  });
+})();
 document.addEventListener("keydown", (e) => {
   const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
   if (e.code === "Space" && !typing) { e.preventDefault(); micButton(); }

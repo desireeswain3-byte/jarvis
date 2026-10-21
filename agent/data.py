@@ -15,6 +15,25 @@ DATA = ROOT / "data"
 DEMO = os.environ.get("JARVIS_DEMO", "1").strip() != "0"
 
 _problems = []
+_errors = {}   # why the live Mail or Calendar could not be read just now
+
+
+def live_error(name):
+    return _errors.get(name)
+
+
+def _live(name, fn):
+    """Real mode with no export file: read the Mac's own app. None (and a reason) when it can't."""
+    if DEMO or os.environ.get("JARVIS_LIVE_APPS", "on").strip().lower() in ("off", "0", "no"):
+        return None
+    try:
+        import mac
+        out = fn(mac)
+        _errors.pop(name, None)
+        return out
+    except Exception as e:  # noqa: BLE001
+        _errors[name] = str(e)
+        return None
 
 
 def is_demo():
@@ -70,7 +89,7 @@ def inbox():
     """List of emails, or None when no inbox export exists."""
     raw = _load("inbox.json")
     if raw is None:
-        return None
+        return _live("inbox", lambda mac: mac.inbox(20))
     out = []
     for m in raw:
         days = m.get("days_ago")
@@ -94,7 +113,7 @@ def calendar():
     """List of events with ISO dates, or None when no calendar export exists."""
     raw = _load("calendar.json")
     if raw is None:
-        return None
+        return _live("calendar", lambda mac: mac.events(7))
     out = []
     for e in raw:
         if "day" in e:

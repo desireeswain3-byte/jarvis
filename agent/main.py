@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 40   # shown in the top bar so you can see which update is running
+BUILD = 41   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -236,6 +236,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_speak(json.loads(raw or b"{}"))
             if path == "/api/listen":
                 return self.api_listen(raw)
+            if path == "/api/act/confirm":
+                import mac
+                with S.lock:
+                    try:
+                        return self.send_json(200, {"say": S.toolbox.confirm_act(json.loads(raw or b"{}").get("id", ""))})
+                    except mac.MacError as e:
+                        return self.send_json(409, {"error": str(e)})
+            if path == "/api/act/cancel":
+                return self.send_json(200, {"ok": S.toolbox.cancel_act(json.loads(raw or b"{}").get("id", ""))})
             if path == "/api/broker/confirm":
                 return self.api_confirm(json.loads(raw or b"{}"))
             if path == "/api/broker/cancel":

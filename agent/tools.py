@@ -54,6 +54,18 @@ TOOL_SCHEMAS = [
     {"name": "research_now",
      "description": "Run your own trading research right now instead of waiting for the schedule. 'morning' checks the market, reads today's market news and studies one new video from her teachers, then writes a research note. 'evening' reviews today's practice trades against her lessons and suggests one rule change (you never change rules yourself). It runs by itself every weekday before the open and after the close. Use for 'do your research', 'what did you find today', 'review today'.",
      "input_schema": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["morning", "evening"]}}, "required": ["kind"]}},
+    {"name": "email",
+     "description": "Her real email, through the Mac's Mail app. 'send' lines up an email; 'delete' lines up moving emails to the Trash (give the ids from read_inbox). Both only happen after she presses Confirm on screen, so say that. For reading mail use read_inbox. 'to' can be an email address or a name from her Contacts.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["send", "delete"]}, "to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}, "ids": {"type": "array", "items": {"type": "string"}}}, "required": ["action"]}},
+    {"name": "send_text",
+     "description": "Line up a text or iMessage to someone, through the Mac's Messages app. 'to' is a name from her Contacts or a phone number. It is only sent after she presses Confirm on screen, so say that. Write the text exactly as she asked; do not add your own words to it.",
+     "input_schema": {"type": "object", "properties": {"to": {"type": "string"}, "text": {"type": "string"}}, "required": ["to", "text"]}},
+    {"name": "calendar",
+     "description": "Her real calendar, through the Mac's Calendar app. 'list' shows the next few days (days, default 7). 'add' creates an event straight away: start as 'YYYY-MM-DD HH:MM' in her local time, minutes long (default 60), optional calendar name. Work out the date from today's date in Context.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "add"]}, "days": {"type": "integer"}, "title": {"type": "string"}, "start": {"type": "string"}, "minutes": {"type": "integer"}, "calendar": {"type": "string"}}, "required": ["action"]}},
+    {"name": "reminders",
+     "description": "Her real reminders, through the Mac's Reminders app (they sync to her iPhone). 'list' shows what is not done. 'add' creates one straight away, with an optional due time as 'YYYY-MM-DD HH:MM' (her phone alerts her then) and optional list name. 'done' ticks off the first unfinished reminder whose name contains title.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "add", "done"]}, "title": {"type": "string"}, "due": {"type": "string"}, "list": {"type": "string"}}, "required": ["action"]}},
     {"name": "save_lesson",
      "description": "Store something worth learning about trading in the trading playbook, so it is remembered and found later by search_brain. Use after watch_video or when she teaches you a rule. Write the lesson in your own words, short and concrete, and name the source. Never store hype or promised returns.",
      "input_schema": {"type": "object", "properties": {"topic": {"type": "string"}, "lesson": {"type": "string"}, "source": {"type": "string"}}, "required": ["topic", "lesson"]}},
@@ -319,13 +331,13 @@ class Toolbox:
     def t_read_inbox(self):
         mail = data.inbox()
         if mail is None:
-            return {"say": "Inbox isn't connected.",
-                    "card": {"kind": "error", "message": "No inbox export found. Put a JSON export at data/inbox.json (see README)."},
-                    "facts": "inbox not connected"}
+            why = data.live_error("inbox") or "Demo mode is on, so there is no real inbox. Set JARVIS_DEMO=0 in .env to use your Mac's Mail app."
+            return {"say": "I could not open your inbox.", "card": {"kind": "error", "message": why}, "facts": "inbox not available: " + why}
         items = []
         for m in sorted(mail, key=lambda x: (not x["unread"], x["days_ago"])):
             known = [k for k in self.vault.mentions(m["from"]) if k["type"] != "memory"]
             items.append({
+                "id": m.get("id", ""), "when": m.get("when", ""),
                 "from": m["from"], "email": m["email"], "subject": m["subject"], "age": m["days_ago"],
                 "unread": m["unread"], "known": known[0] if known else None,
                 "flag": bool(INJECTION.search(m["body"] + " " + m["subject"])),
@@ -338,7 +350,7 @@ class Toolbox:
         if flagged:
             say += " One message tries to give me instructions. I'm treating it as data."
         facts = wrap_data("inbox", "\n".join(
-            "%s <%s> | %s | %s | %s | %s" % (i["from"], i["email"], i["subject"], "unread" if i["unread"] else "read",
+            "id %s | %s | %s <%s> | %s | %s | %s | %s" % (i["id"] or "-", i["when"] or ("%d days ago" % i["age"]), i["from"], i["email"], i["subject"], "unread" if i["unread"] else "read",
                                            ("known: " + i["known"]["title"]) if i["known"] else "not in files", i["preview"])
             for i in items))
         return {"say": say, "card": {"kind": "inbox", "items": items}, "facts": facts}
@@ -798,6 +810,130 @@ class Toolbox:
         except broker.BrokerError as e:
             return {"say": "The broker had a problem.", "card": {"kind": "error", "message": str(e)}, "facts": "broker error: " + str(e), "actions": []}
         return {"say": "Status, positions, or an order?", "card": None, "facts": "unknown broker action", "actions": []}
+
+    # ---------- her Mac's own apps: mail, texts, calendar, reminders ----------
+    def _propose(self, kind, title, lines, payload, say):
+        now = time.time()
+        self.pending_acts = {k: p for k, p in getattr(self, "pending_acts", {}).items() if p["expires"] > now}
+        aid = uuid.uuid4().hex[:12]
+        self.pending_acts[aid] = dict(payload, kind=kind, expires=now + 180)
+        return {"say": say, "card": {"kind": "confirm", "id": aid, "title": title, "lines": lines, "seconds": 180},
+                "facts": "LINED UP, NOT DONE. Waiting for her to press Confirm on screen. " + " | ".join(lines), "actions": []}
+
+    def _resolve(self, who, kind):
+        """A name from Contacts, or an address as is. Returns (address, label) or (None, why)."""
+        import mac
+        who = (who or "").strip()
+        if not who:
+            return None, "Who should it go to?"
+        if mac.looks_like_address(who):
+            return who, who
+        try:
+            hits = mac.find_contact(who, kind)
+        except mac.MacError as e:
+            return None, str(e)
+        if not hits:
+            return None, "I could not find %s in your Contacts with %s." % (who, "a phone number" if kind == "phone" else "an email address")
+        names = sorted({h["name"] for h in hits})
+        if len(names) > 1:
+            return None, "More than one contact matches %s: %s. Which one?" % (who, ", ".join(names[:5]))
+        return hits[0]["value"], "%s (%s)" % (hits[0]["name"], hits[0]["value"])
+
+    def t_email(self, action="send", to="", subject="", body="", ids=None):
+        if data.is_demo():
+            return {"say": "Demo mode is on, so I can't touch real email. Set JARVIS_DEMO=0 in .env first.", "card": None, "facts": "demo mode, no real mail"}
+        if action == "delete":
+            ids = [str(i) for i in (ids or []) if str(i).strip().isdigit()][:25]
+            if not ids:
+                return {"say": "Which emails? Let me read your inbox first.", "card": None, "facts": "no email ids given; call read_inbox to get ids"}
+            mail = {m.get("id"): m for m in (data.inbox() or [])}
+            lines = ["%s: %s" % (mail[i]["from"], mail[i]["subject"]) if i in mail else "email id " + i for i in ids]
+            return self._propose("delete_mail", "Move %d email%s to the Trash?" % (len(ids), "" if len(ids) == 1 else "s"), lines, {"ids": ids},
+                                 "Lined up %d email%s for the Trash. Press Confirm on screen. Nothing is deleted yet." % (len(ids), "" if len(ids) == 1 else "s"))
+        addr, label = self._resolve(to, "email")
+        if not addr:
+            return {"say": label, "card": None, "facts": label}
+        if not (subject or body):
+            return {"say": "What should the email say?", "card": None, "facts": "no subject or body"}
+        return self._propose("send_mail", "Send this email?", ["To: " + label, "Subject: " + (subject or "(none)"), body or ""], {"to": addr, "subject": subject, "body": body},
+                             "The email to %s is ready. Press Confirm on screen to send it." % label.split(" (")[0])
+
+    def t_send_text(self, to="", text=""):
+        if data.is_demo():
+            return {"say": "Demo mode is on, so I can't send real texts. Set JARVIS_DEMO=0 in .env first.", "card": None, "facts": "demo mode, no real texts"}
+        text = str(text or "").strip()
+        if not text:
+            return {"say": "What should the text say?", "card": None, "facts": "empty text"}
+        addr, label = self._resolve(to, "phone")
+        if not addr:
+            return {"say": label, "card": None, "facts": label}
+        return self._propose("send_text", "Send this text?", ["To: " + label, text[:1000]], {"to": addr, "text": text[:1000]},
+                             "Your text to %s is ready. Press Confirm on screen to send it." % label.split(" (")[0])
+
+    def confirm_act(self, aid):
+        """Called only by the Confirm button on screen. One use, expires after three minutes."""
+        import mac
+        p = getattr(self, "pending_acts", {}).pop(str(aid), None)
+        if not p or p["expires"] < time.time():
+            raise mac.MacError("That expired or was already used. Ask me again.")
+        if p["kind"] == "send_text":
+            mac.confirm_send_text(p["to"], p["text"])
+            return "Sent your text."
+        if p["kind"] == "send_mail":
+            mac.confirm_send_mail(p["to"], p["subject"], p["body"])
+            return "Email sent."
+        if p["kind"] == "delete_mail":
+            n = mac.confirm_delete_mail(p["ids"])
+            return "Moved %d email%s to the Trash." % (n, "" if n == 1 else "s")
+        raise mac.MacError("I don't know how to do that.")
+
+    def cancel_act(self, aid):
+        return bool(getattr(self, "pending_acts", {}).pop(str(aid), None))
+
+    def t_calendar(self, action="list", days=7, title="", start="", minutes=60, calendar=""):
+        import mac
+        if data.is_demo():
+            return {"say": "Demo mode is on, so this is not your real calendar. Set JARVIS_DEMO=0 in .env first.", "card": None, "facts": "demo mode"}
+        try:
+            if action == "add":
+                if not title or not start:
+                    return {"say": "What is it, and when?", "card": None, "facts": "need title and start"}
+                d = mac._iso(str(start).replace(" ", "T", 1))
+                if not d:
+                    return {"say": "I need a date and time for that.", "card": None, "facts": "start must be YYYY-MM-DD HH:MM"}
+                cal = mac.add_event(title, d, minutes or 60, calendar or "")
+                when = d.strftime("%A %B %d at %I:%M %p").replace(" 0", " ")
+                return {"say": "Added %s to your %s calendar, %s." % (title, cal, when), "card": None, "facts": "Event created: %s, %s, %d minutes, calendar %s." % (title, when, minutes or 60, cal)}
+            evs = mac.events(days or 7)
+        except mac.MacError as e:
+            return {"say": str(e), "card": None, "facts": str(e)}
+        if not evs:
+            return {"say": "Nothing on your calendar for the next %d days." % (days or 7), "card": None, "facts": "no events"}
+        rows = [{"file": "%s %s" % (e["date"], e["time"] or "all day"), "text": e["title"] + ((" @ " + e["with"]) if e["with"] else "")} for e in evs[:25]]
+        return {"say": "You have %d thing%s in the next %d days." % (len(evs), "" if len(evs) == 1 else "s", days or 7), "card": {"kind": "memory", "files": rows},
+                "facts": wrap_data("calendar", "\n".join("%s | %s | %s" % (r["file"], r["text"], e["calendar"]) for r, e in zip(rows, evs)))}
+
+    def t_reminders(self, action="list", title="", due="", list=""):  # noqa: A002
+        import mac
+        try:
+            if action == "add":
+                if not title:
+                    return {"say": "What should I remind you about?", "card": None, "facts": "no title"}
+                d = mac._iso(str(due).replace(" ", "T", 1)) if due else None
+                lst = mac.add_reminder(title, d, list or "")
+                when = (" for " + d.strftime("%A %B %d at %I:%M %p").replace(" 0", " ")) if d else ""
+                return {"say": "Reminder set%s: %s." % (when, title), "card": None, "facts": "Reminder added to list %s: %s%s." % (lst, title, when)}
+            if action == "done":
+                name = mac.complete_reminder(title)
+                return {"say": "Ticked off: %s." % name, "card": None, "facts": "Completed reminder " + name}
+            rows = mac.reminders()
+        except mac.MacError as e:
+            return {"say": str(e), "card": None, "facts": str(e)}
+        if not rows:
+            return {"say": "No reminders left. You're all caught up.", "card": None, "facts": "no open reminders"}
+        files = [{"file": r["due"] or r["list"], "text": r["title"]} for r in rows[:30]]
+        return {"say": "You have %d open reminder%s." % (len(rows), "" if len(rows) == 1 else "s"), "card": {"kind": "memory", "files": files},
+                "facts": wrap_data("reminders", "\n".join("%s | due %s | list %s" % (r["title"], r["due"] or "none", r["list"]) for r in rows[:30]))}
 
     def confirm_order(self, oid):
         """Called only by the Confirm button on screen. One use, expires after two minutes."""

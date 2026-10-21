@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 40;
+const UI_BUILD = 41;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -356,6 +356,31 @@ function renderCard(c) {
       no.addEventListener("click", async () => {
         try { await fetch("/api/broker/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) }); } catch (e) { /* ignore */ }
         d.remove(); screenChanged(); setCaption("Cancelled. Nothing was sent.", "JARVIS:");
+      });
+      bar.append(ok, no);
+      d.appendChild(bar);
+      return d;
+    }
+    case "confirm": {
+      const d = card(c.title || "Confirm", "inbox");
+      (c.lines || []).forEach((t, i) => d.appendChild(el("div", i === (c.lines.length - 1) && c.lines.length > 2 ? "hint" : "bigline", t)));
+      d.appendChild(el("div", "hint", "Nothing has happened yet. This expires in 3 minutes."));
+      const bar = el("div", "btnrow");
+      const ok = el("button", "go", "Confirm"), no = el("button", "", "Cancel");
+      ok.type = "button"; no.type = "button";
+      ok.addEventListener("click", async (ev) => {
+        if (!ev.isTrusted) return;   // only a real mouse click or key press can confirm, never a script or a hand gesture
+        ok.disabled = no.disabled = true; ok.textContent = "Working";
+        try {
+          const r = await fetch("/api/act/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || r.statusText);
+          d.remove(); screenChanged(); setCaption(j.say, "JARVIS:"); speak(j.say);
+        } catch (e) { alertBar("That did not go through.", e.message); d.remove(); screenChanged(); }
+      });
+      no.addEventListener("click", async () => {
+        try { await fetch("/api/act/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) }); } catch (e) { /* ignore */ }
+        d.remove(); screenChanged(); setCaption("Cancelled. Nothing was sent or deleted.", "JARVIS:");
       });
       bar.append(ok, no);
       d.appendChild(bar);

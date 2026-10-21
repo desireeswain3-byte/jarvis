@@ -136,3 +136,6 @@ Copyright (c) 2026 Desiree Swain. All rights reserved. See LICENSE. Do not copy 
 ## Research and learning
 - **On his own:** every weekday before the open he checks the market, reads market news and studies one new video from `RESEARCH_TEACHERS`, then saves a note in `memory/trading/research/` and tells you the highlights. After the close he reviews the day's practice trades and suggests one rule change. He never changes autopilot's rules himself. Say "do your research" to run it now.
 - **Teach button:** paste a transcript or article of any length (or a YouTube link). He keeps the full text in `memory/trading/transcripts/` and saves each concrete rule as a lesson in `memory/trading/lessons/`. All of it stays on your Mac and is never uploaded.
+
+## Real mail, texts, calendar and reminders
+Set `JARVIS_DEMO=0` in `.env`. JARVIS then reads your Mac's own Mail and Calendar apps (every account you added there, like Gmail), and can add calendar events and reminders. Sending a text, sending an email and deleting email are lined up and only happen after you press Confirm on screen. Deleted mail goes to the Trash. macOS asks once per app for permission. Set `JARVIS_LIVE_APPS=off` to turn the apps off again.

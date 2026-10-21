@@ -257,3 +257,38 @@ body.companion #transcript { left: 1.6rem; bottom: 1.5rem; width: 22rem; max-hei
 .teach-row button:hover { background: var(--accent); }
 .teach-row button:disabled { opacity: 0.5; cursor: wait; }
 #teach-cancel { background: #3f3f46; }
+
+/* ---------- Hologram view ---------- */
+body.holo #graph, body.holo #graph-labels { opacity: 0.08; transition: opacity 0.6s; }
+body.holo #left, body.holo #right, body.holo #hud-left, body.holo #hud-right { display: none; }
+body.holo #handcam.on { top: 0; left: 0; margin: 0; width: 100vw; height: 100vh; border: 0; border-radius: 0; opacity: 0.42; z-index: -1; filter: saturate(0.55) contrast(1.05) brightness(0.8); }
+body.holo::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(var(--glow), 0.06), rgba(2, 10, 12, 0.55) 75%),
+              repeating-linear-gradient(0deg, rgba(var(--glow), 0.035) 0 1px, transparent 1px 4px); }
+#holo-3d { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 20; pointer-events: none; }
+#holo-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+.holo-bubble { position: absolute; left: 0; top: 0; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  pointer-events: auto; cursor: grab; user-select: none; touch-action: none; will-change: transform;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.16), rgba(var(--glow), 0.08) 45%, rgba(2, 20, 22, 0.35) 70%);
+  border: 0.0625rem solid rgba(var(--glow), 0.55);
+  box-shadow: 0 0 1.5rem rgba(var(--glow), 0.28), inset 0 0 1.75rem rgba(var(--glow), 0.18);
+  backdrop-filter: blur(0.25rem); -webkit-backdrop-filter: blur(0.25rem); transition: box-shadow 0.2s, border-color 0.2s; }
+.holo-bubble.held { cursor: grabbing; border-color: rgba(255, 255, 255, 0.9); box-shadow: 0 0 2.75rem rgba(var(--glow), 0.6), inset 0 0 2rem rgba(var(--glow), 0.3); }
+.holo-bubble.up { border-color: rgba(134, 239, 172, 0.7); }
+.holo-bubble.down { border-color: rgba(255, 138, 107, 0.75); }
+.hb-label { font: 700 0.6875rem var(--mono); letter-spacing: 0.22em; color: var(--accent); text-transform: uppercase; }
+.hb-big { font: 600 1.6rem var(--mono); color: var(--ink); text-shadow: 0 0 0.75rem rgba(var(--glow), 0.8); margin: 0.2rem 0 0.1rem; }
+.hb-sub { font: 0.625rem var(--mono); color: var(--dim); letter-spacing: 0.08em; }
+.holo-bubble.up .hb-sub { color: #86efac; }
+.holo-bubble.down .hb-sub { color: #ff8a6b; }
+.holo-card { position: absolute; width: 20rem; max-height: 16rem; overflow: auto; pointer-events: auto; padding: 0.75rem; border-radius: 0.75rem;
+  background: rgba(4, 18, 20, 0.82); border: 0.0625rem solid var(--line); box-shadow: 0 0 1.5rem rgba(var(--glow), 0.25); backdrop-filter: blur(0.375rem); -webkit-backdrop-filter: blur(0.375rem); z-index: 2; }
+.hc-head { display: flex; justify-content: space-between; align-items: center; font: 700 0.6875rem var(--mono); letter-spacing: 0.14em; color: var(--accent); margin-bottom: 0.5rem; text-transform: uppercase; }
+.hc-head .x { background: none; border: 0; color: var(--dim); font-size: 1.1rem; cursor: pointer; }
+.hc-row { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.375rem 0; border-top: 0.0625rem solid rgba(var(--glow), 0.12); font-size: 0.75rem; }
+.hc-row b { color: var(--ink); font-weight: 600; }
+.hc-row span { color: var(--dim); }
+.hc-empty { color: var(--dim); font-size: 0.75rem; }
+.holo-hint { position: absolute; top: 3.5rem; left: 50%; transform: translateX(-50%); font: 0.75rem var(--mono); color: var(--accent); background: rgba(4, 18, 20, 0.7); border: 0.0625rem solid var(--line); border-radius: 62rem; padding: 0.375rem 0.875rem; transition: opacity 1s; white-space: nowrap; }
+.holo-hint.fade { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .holo-bubble { transition: none; } }

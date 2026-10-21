@@ -139,3 +139,6 @@ Copyright (c) 2026 Desiree Swain. All rights reserved. See LICENSE. Do not copy 
 
 ## Real mail, texts, calendar and reminders
 Set `JARVIS_DEMO=0` in `.env`. JARVIS then reads your Mac's own Mail and Calendar apps (every account you added there, like Gmail), and can add calendar events and reminders. Sending a text, sending an email and deleting email are lined up and only happen after you press Confirm on screen. Deleted mail goes to the Trash. macOS asks once per app for permission. Set `JARVIS_LIVE_APPS=off` to turn the apps off again.
+
+## Hologram view
+Press **Holo** (or say "holo mode"). Your camera becomes the background, glass bubbles float with live numbers (trading, inbox, calendar, reminders, lessons, research, brain) and 3D objects hover. Pinch or click to grab, flick to throw, tap a bubble to open it, two hands on a 3D object to stretch it. Drop any `.glb` 3D model into `ui/props/` and it floats there too. The 3D part loads three.js from jsdelivr.net the first time.

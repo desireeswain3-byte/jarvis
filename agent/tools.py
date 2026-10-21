@@ -66,6 +66,9 @@ TOOL_SCHEMAS = [
     {"name": "reminders",
      "description": "Her real reminders, through the Mac's Reminders app (they sync to her iPhone). 'list' shows what is not done. 'add' creates one straight away, with an optional due time as 'YYYY-MM-DD HH:MM' (her phone alerts her then) and optional list name. 'done' ticks off the first unfinished reminder whose name contains title.",
      "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "add", "done"]}, "title": {"type": "string"}, "due": {"type": "string"}, "list": {"type": "string"}}, "required": ["action"]}},
+    {"name": "holo",
+     "description": "Switch the hologram view on or off. In it her camera is the background, glowing bubbles float with live numbers (trading, inbox, calendar, reminders, lessons, research) and 3D objects hover; she pinches or clicks to grab, flicks to throw, taps a bubble to open it. Use for 'holo mode', 'show the bubbles', 'hologram', 'turn off the bubbles'.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off"]}}, "required": ["action"]}},
     {"name": "save_lesson",
      "description": "Store something worth learning about trading in the trading playbook, so it is remembered and found later by search_brain. Use after watch_video or when she teaches you a rule. Write the lesson in your own words, short and concrete, and name the source. Never store hype or promised returns.",
      "input_schema": {"type": "object", "properties": {"topic": {"type": "string"}, "lesson": {"type": "string"}, "source": {"type": "string"}}, "required": ["topic", "lesson"]}},
@@ -542,6 +545,11 @@ class Toolbox:
             return {"say": "I need the model for research. Add ANTHROPIC_API_KEY to .env.", "card": None, "facts": "no model key"}
         say = research.run("evening" if kind == "evening" else "morning", self, lambda k, t: None)
         return {"say": say, "card": None, "facts": "Research finished and saved in memory/trading/research. What I found: " + say, "refresh": True}
+
+    def t_holo(self, action="on"):
+        on = action != "off"
+        return self._action("Hologram view on. Pinch a bubble to grab it, flick to throw it, tap to open it." if on else "Hologram view off.", [{"type": "holo", "on": on}],
+                            "holo view switched %s" % ("on" if on else "off"))
 
     def t_save_lesson(self, topic, lesson, source=""):
         import json as _j

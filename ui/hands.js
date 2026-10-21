@@ -149,7 +149,7 @@ const HandTracker = (function () {
 
     // both hands pinching the graph background: zoom by how far apart they are
     const pin = slots.filter((s) => s.pinching);
-    if (pin.length === 2 && opts.onZoom && pin.every((s) => s.zoom || isBackdrop(s.target))) {
+    if (pin.length === 2 && opts.onZoom && !(window.Holo && Holo.isOn()) && pin.every((s) => s.zoom || isBackdrop(s.target))) {
       pin.forEach((s) => { if (!s.zoom) { fire('pointercancel', s, s.target, false); s.zoom = true; } });
       const dd = Math.hypot(pin[0].x - pin[1].x, pin[0].y - pin[1].y);
       if (prevPair > 0 && dd > 0) opts.onZoom((pin[0].x + pin[1].x) / 2, (pin[0].y + pin[1].y) / 2, dd / prevPair);

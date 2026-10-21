@@ -301,6 +301,7 @@ async function runActions(actions) {
       if (hold) hold.textContent = "";
       if (window.Ambience) { if (a.id === "focus" || a.id === "spa") window.Ambience.play(a.id); else window.Ambience.stop(); }
     }
+    else if (a.type === "holo") { if (window.Holo) window.Holo.set(!!a.on); }
     else if (a.type === "history") { if (a.dir === "forward") viewer.forward(); else viewer.back(); }
   }
 }

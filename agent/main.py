@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 42   # shown in the top bar so you can see which update is running
+BUILD = 43   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -145,6 +145,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"voices": voice.list_voices(), "default": voice.default_voice()})
             except voice.VoiceError as e:
                 return self.send_json(503, {"error": str(e)})
+        if u.path == "/api/holo":
+            import holo
+            return self.send_json(200, {"bubbles": holo.bubbles(S.vault), "props": holo.props()})
         if u.path == "/api/memory":
             return self.send_json(200, {"files": memory.listing()})
         if u.path.startswith("/api/"):

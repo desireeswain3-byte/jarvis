@@ -6,6 +6,7 @@ import threading
 import time
 
 import autopilot
+import awake
 import broker
 import notify
 import research
@@ -128,6 +129,7 @@ class Watcher:
         while not self.stop:
             try:
                 research.tick(self.tb, push)   # morning research before the open, evening review after the close
+                awake.tick(push)               # stay awake with the lid closed during the trading day
             except Exception:  # noqa: BLE001
                 pass
             try:

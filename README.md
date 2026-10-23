@@ -145,3 +145,7 @@ Press **Holo** (or say "holo mode"). Your camera becomes the background, glass b
 
 ## Think hard mode
 Everyday questions stay quick. Say "think hard", "deep dive", "in depth" or "take your time" and JARVIS switches to the bigger model (`JARVIS_DEEP_MODEL`), searches the web, reads whole pages, and takes as many steps as he needs. He speaks a short summary and puts the full answer, with sources, on screen. Each one is saved in `memory/deep/`. These answers are slower and cost more on your Anthropic bill.
+
+## On your phone
+- **Alerts:** `python3 agent/setup_alerts.py` emails you every buy, sell, stop and the end-of-day summary (Gmail App Password, asked in a pop-up box). The Gmail app on your phone buzzes for each one.
+- **JARVIS on your iPhone:** install Tailscale on the Mac and the iPhone, sign in to both, then run `bash scripts/setup_phone.sh`. It prints a private https link that only your own devices can open. Open it in Safari, then Share, Add to Home Screen. JARVIS still runs on the Mac, so the Mac has to be awake.

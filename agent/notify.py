@@ -23,14 +23,19 @@ def _send(subject, body):
         s.send_message(msg)
 
 
+SUBJECTS = {"order": "JARVIS: order", "fill": "JARVIS: order filled", "position": "JARVIS: position", "guard": "JARVIS: profit guard sold",
+            "alert": "JARVIS: needs your attention", "autopilot": "JARVIS: autopilot", "summary": "JARVIS: end of day", "research": "JARVIS: research", "pl": "JARVIS: account moved"}
+
+
 def send(kind, text):
-    if kind == "sim" or not configured():
+    # "worth a look" signals can come often, so they stay on screen unless NOTIFY_SIGNALS=on
+    if kind == "sim" or not configured() or (kind == "signal" and os.environ.get("NOTIFY_SIGNALS", "off").lower() != "on"):
         return
-    threading.Thread(target=lambda: _try(text), daemon=True).start()
+    threading.Thread(target=lambda: _try(SUBJECTS.get(kind, "JARVIS trading update"), text), daemon=True).start()
 
 
-def _try(text):
+def _try(subject, text):
     try:
-        _send("JARVIS trading update", text)
+        _send(subject, text)
     except Exception:
         pass

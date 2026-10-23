@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 45   # shown in the top bar so you can see which update is running
+BUILD = 46   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -60,9 +60,15 @@ class State:
 S = None
 
 
+def allowed_hosts():
+    """Her own devices through Tailscale (set by scripts/setup_phone.sh). The server still only listens on this Mac;
+    Tailscale's private, encrypted link is the only way in from her phone."""
+    return {h.strip().lower().rstrip(".") for h in os.environ.get("JARVIS_ALLOWED_HOSTS", "").split(",") if h.strip()}
+
+
 def host_ok(host_header):
     host = (host_header or "").split(":")[0] if not (host_header or "").startswith("[") else "[::1]"
-    return host in LOCAL_HOSTS
+    return host in LOCAL_HOSTS or host.lower() in allowed_hosts()
 
 
 class Handler(BaseHTTPRequestHandler):

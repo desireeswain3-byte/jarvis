@@ -78,12 +78,26 @@ def build_system(wiring=None):
     return [{"type": "text", "text": steady, "cache_control": {"type": "ephemeral"}}, {"type": "text", "text": "\n\n".join(parts)}]
 
 
-def _post(body):
+DEEP = re.compile(r"\b(think (?:hard|harder|deeply|carefully|it through)|deep (?:dive|research|mode|think)|research (?:this|that|it) (?:properly|thoroughly|deeply|in depth)|in[- ]depth|take your time|dig deep(?:er)?|be thorough|thorough(?:ly)? research)\b", re.I)
+DEEP_SYSTEM = """## Think hard mode (on for this question)
+She asked you to think hard, so take the time to get it right. Use as many tool calls as you need: search the web, then read_page the most useful results (two to five pages from good sources), check her own files with search_brain, and compare what you find. Prefer primary and recent sources, say when sources disagree, and never invent numbers or links.
+Answer in two parts. First, 2 to 4 short spoken sentences with the bottom line, in your usual voice. Then a line that is exactly ---DETAIL--- and then the full answer for the screen: clear sections, the reasoning, the numbers, and a short Sources list with the page titles and links you actually read. No em dashes or en dashes."""
+
+
+def deep_model():
+    return os.environ.get("JARVIS_DEEP_MODEL", "claude-opus-5-5").strip()
+
+
+def is_deep(text):
+    return os.environ.get("DEEP_MODE", "on").strip().lower() not in ("off", "no", "0") and bool(DEEP.search(text or ""))
+
+
+def _post(body, timeout=90):
     req = urllib.request.Request(
         api_url(), data=json.dumps(body).encode(), method="POST",
         headers={"x-api-key": key(), "anthropic-version": "2023-06-01", "content-type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=90) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read()[:200].decode("utf-8", "replace")
@@ -102,7 +116,10 @@ def _screen_block(screen):
 
 
 def converse(text, history, toolbox, screen=None, image=None, wiring=None):
+    deep = is_deep(text)
     system = build_system(wiring)
+    if deep:
+        system = system + [{"type": "text", "text": DEEP_SYSTEM}]
     user = [{"type": "text", "text": (_screen_block(screen) if screen else "") + text}]
     if image:
         user.insert(0, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image.split(",", 1)[1]}})
@@ -110,9 +127,9 @@ def converse(text, history, toolbox, screen=None, image=None, wiring=None):
     msgs = list(history) + [{"role": "user", "content": user}]
     cards, used, says, refresh, actions = [], [], {}, False, []
     reply = ""
-    for _ in range(MAX_ROUNDS):
-        r = _post({"model": model_name(), "max_tokens": 700, "system": system,
-                   "tools": tools.TOOL_SCHEMAS, "messages": msgs})
+    for _ in range(14 if deep else MAX_ROUNDS):
+        r = _post({"model": deep_model() if deep else model_name(), "max_tokens": 4000 if deep else 700, "system": system,
+                   "tools": tools.TOOL_SCHEMAS, "messages": msgs}, timeout=300 if deep else 90)
         content = r.get("content", [])
         msgs.append({"role": "assistant", "content": content})
         if r.get("stop_reason") != "tool_use":
@@ -134,10 +151,37 @@ def converse(text, history, toolbox, screen=None, image=None, wiring=None):
         msgs.append({"role": "user", "content": results})
     if not reply:
         reply = says.get(used[-1], "") if used else "I have nothing to add."
+    if deep:
+        reply, report = _split_report(reply, text)
+        if report:
+            cards.append(report)
+            refresh = True
     # Guardrail in code: a memory write is always said out loud.
     if "remember" in says and "memory" not in reply.lower():
         reply = says["remember"] + " " + reply
     return {"reply": reply, "cards": cards, "tools": used, "refresh": refresh, "actions": actions}
+
+
+def _split_report(reply, question):
+    """Think hard answers: the short part is spoken, the full part goes on screen and is saved in memory/deep."""
+    if "---DETAIL---" not in reply:
+        if len(reply) < 700:
+            return reply, None
+        spoken, detail = " ".join(re.split(r"(?<=[.!?])\s+", reply)[:3]), reply
+    else:
+        spoken, detail = [x.strip() for x in reply.split("---DETAIL---", 1)]
+    title = " ".join(question.split())[:80]
+    try:
+        d = memory.MEM / "deep"
+        d.mkdir(parents=True, exist_ok=True)
+        day = datetime.date.today().isoformat()
+        slug = "-".join(re.sub(r"[^a-z0-9 ]+", "", title.lower()).split()[:7]) or "answer"
+        path = d / ("%s-%s.md" % (day, slug))
+        path.write_text("---\ndate: %s\ntype: deep-answer\n---\n# %s\n\n%s\n" % (day, title, detail), encoding="utf-8")
+        saved = "deep/" + path.name
+    except OSError:
+        saved = ""
+    return spoken, {"kind": "report", "title": title, "text": detail, "saved": saved}
 
 
 # ---------- offline routing: score the question against the files ----------

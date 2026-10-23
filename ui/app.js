@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 44;
+const UI_BUILD = 45;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -423,6 +423,21 @@ function renderCard(c) {
       d.appendChild(note);
       return d;
     }
+    case "report": {
+      const d = card(c.title || "Answer", "search");
+      d.classList.add("report");
+      const body = el("div", "report-body");
+      String(c.text || "").split(/\n/).forEach((line) => {
+        const t = line.trim();
+        if (!t) return;
+        if (/^#{1,4}\s/.test(t)) body.appendChild(el("h4", "", t.replace(/^#+\s*/, "")));
+        else if (/^[-*]\s/.test(t)) body.appendChild(el("div", "rb-li", "\u2022 " + t.replace(/^[-*]\s*/, "").replace(/\*\*/g, "")));
+        else body.appendChild(el("p", "", t.replace(/\*\*/g, "")));
+      });
+      d.appendChild(body);
+      if (c.saved) d.appendChild(el("div", "hint", "Saved in memory/" + c.saved + " so you can find it later."));
+      return d;
+    }
     case "memory": {
       const d = card("Memory");
       if (!c.files.length) d.appendChild(row("Nothing remembered yet.", ""));
@@ -709,6 +724,8 @@ async function ask(text, opts) {
   pauseRecorder();
   setState("thinking");
   if (!opts.hidden) setCaption(text, "You:");
+  if (/\b(think (hard|harder|deeply|carefully|it through)|deep (dive|research|mode|think)|in[- ]depth|take your time|dig deep|be thorough)\b/i.test(text))
+    setTimeout(() => { if (state === "thinking") setCaption("Thinking hard, Madam Swain. Reading sources, this can take a minute or two.", "JARVIS:"); }, 1200);
   const ctl = new AbortController();
   inflight = ctl;
   let out;

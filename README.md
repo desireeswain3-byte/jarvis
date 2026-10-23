@@ -142,3 +142,6 @@ Set `JARVIS_DEMO=0` in `.env`. JARVIS then reads your Mac's own Mail and Calenda
 
 ## Hologram view
 Press **Holo** (or say "holo mode"). Your camera becomes the background, glass bubbles float with live numbers (trading, inbox, calendar, reminders, lessons, research, brain) and 3D objects hover. Pinch or click to grab, flick to throw, tap a bubble to open it, two hands on a 3D object to stretch it. Drop any `.glb` 3D model into `ui/props/` and it floats there too. The 3D part loads three.js from jsdelivr.net the first time.
+
+## Think hard mode
+Everyday questions stay quick. Say "think hard", "deep dive", "in depth" or "take your time" and JARVIS switches to the bigger model (`JARVIS_DEEP_MODEL`), searches the web, reads whole pages, and takes as many steps as he needs. He speaks a short summary and puts the full answer, with sources, on screen. Each one is saved in `memory/deep/`. These answers are slower and cost more on your Anthropic bill.

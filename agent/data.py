@@ -65,8 +65,7 @@ def roots():
             out.append((p.name or "root", p))
         else:
             _problems.append("Folder not found: " + part)
-    if not out:
-        _problems.append("JARVIS_DEMO=0 but no folders found. Set JARVIS_FOLDERS in .env (separate paths with '%s')." % os.pathsep)
+    # No folders set is fine: he still has his own memory (trading lessons, research) plus Mail, Calendar and Reminders.
     return out
 
 

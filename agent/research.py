@@ -184,7 +184,8 @@ def _new_teacher_video():
     for t in teachers():
         key = re.sub(r"[^a-z0-9]", "", t.lower())
         try:
-            items = video.search("%s day trading" % t, 12)
+            topic = "swing trading" if datetime.date.today().weekday() == 4 else "day trading"   # Fridays: one swing trading video
+            items = video.search("%s %s" % (t, topic), 12)
         except Exception:  # noqa: BLE001
             continue
         for it in items:

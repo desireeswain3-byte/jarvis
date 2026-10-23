@@ -34,8 +34,8 @@ TOOL_SCHEMAS = [
      "description": "Day by day trading math. Gives what a daily percentage does to an account over a day, week, month, 3 months and a year, and the expected daily result from win rate, reward to risk, risk per trade and trades per day. Exact arithmetic, not a prediction.",
      "input_schema": {"type": "object", "properties": {"account": {"type": "number"}, "daily_percent": {"type": "number"}, "add_per_day": {"type": "number"}, "win_rate": {"type": "number"}, "reward_to_risk": {"type": "number"}, "risk_percent": {"type": "number"}, "trades_per_day": {"type": "number"}}, "required": ["account"]}},
     {"name": "autopilot",
-     "description": "Switch autopilot on or off, or say what it is doing. It starts on the practice account with fake money. A live account stays locked until the practice autopilot finishes 20 trades and makes money overall, AND she adds AUTO_ALLOW_LIVE=yes. Guardrails: small size, a stop loss at the broker on every buy, the profit guard, stops for the day when today's losses are bigger than its wins, when the daily goal is reached, or at the daily loss limit, pauses itself if the system loses money over time, sells before the close. Use for 'turn on autopilot', 'let him trade', 'autopilot off', 'what is autopilot doing', 'can autopilot go live'. Never say it will make money.",
-     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off", "status"]}}, "required": ["action"]}},
+     "description": "Switch autopilot on or off, or say what it is doing. It starts on the practice account with fake money. A live account stays locked until the practice autopilot finishes 20 trades and makes money overall, AND she adds AUTO_ALLOW_LIVE=yes. Guardrails: small size, a stop loss at the broker on every buy, the profit guard, stops for the day when today's losses are bigger than its wins, when the daily goal is reached, or at the daily loss limit, pauses itself if the system loses money over time, sells before the close. Use for 'turn on autopilot', 'let him trade', 'autopilot off', 'what is autopilot doing', 'can autopilot go live'. swing_on and swing_off switch swing mode, which holds a trade for days (pullbacks and breakouts on the daily chart, stop put back every morning, profit at 2R, sell after 10 trading days), practice account first; use for 'swing trade', 'swing mode on', 'stop swing trading'. Day trading stays her main plan. Never say it will make money.",
+     "input_schema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["on", "off", "status", "swing_on", "swing_off"]}}, "required": ["action"]}},
     {"name": "check_messages",
      "description": "Read her most recent Apple Messages (texts and iMessages) on her Mac. Read only: you can never send, reply or delete. Optional contact filter by phone number, email or name fragment. Use for 'check my messages', 'did anyone text me', 'what did Mom say'. If the Mac has not allowed access, give her the steps from the result. Do not quote private messages back at length, summarise.",
      "input_schema": {"type": "object", "properties": {"contact": {"type": "string"}, "limit": {"type": "integer"}}}},
@@ -446,8 +446,12 @@ class Toolbox:
 
     def t_autopilot(self, action="status"):
         import autopilot
+        import swing
         if action in ("on", "off"):
             ok, msg = autopilot.set_on(action == "on")
+            return {"say": msg, "card": None, "facts": msg}
+        if action in ("swing_on", "swing_off"):
+            ok, msg = swing.set_on(action == "swing_on")
             return {"say": msg, "card": None, "facts": msg}
         st = autopilot.status()
         if st["mode"] == "not connected":
@@ -463,6 +467,9 @@ class Toolbox:
                 msg += " " + st["live_ready"][1]
             elif st["mode"] == "paper":
                 msg += " Live autopilot is %s." % ("unlocked by your practice results" if st["graduated"] else "locked until the practice run passes (20 finished trades that made money overall)")
+        sw = swing.status()
+        if sw["on"] or sw["positions"]:
+            msg += " Swing mode is %s%s." % ("on" if sw["on"] else "off", (", holding " + ", ".join("%s (stop $%.2f)" % (k, v["stop"]) for k, v in sw["positions"].items())) if sw["positions"] else "")
         return {"say": msg, "card": None, "facts": msg}
 
     def t_check_messages(self, contact="", limit=8):
@@ -767,6 +774,7 @@ class Toolbox:
                                    {"name": "Orders per day", "state": str(broker.max_orders_per_day())},
                                    {"name": "Profit guard", "state": ("ON: sells at %.0f%% giveback or %.0f%% loss" % (__import__("watch")._fnum("GUARD_GIVEBACK", 40.0), __import__("watch")._fnum("GUARD_MAX_LOSS", 3.0))) if __import__("watch").guard_enabled() else "OFF"},
                                    {"name": "Autopilot", "state": ("ON (%s)" % ("practice" if broker.mode() == "paper" else "LIVE")) if __import__("autopilot").is_on() else "OFF"},
+                                   {"name": "Swing mode", "state": ("ON (%d held)" % len(__import__("swing").symbols())) if __import__("swing").is_on() else ("OFF, managing %d" % len(__import__("swing").symbols()) if __import__("swing").symbols() else "OFF")},
                                    {"name": "Daily goal / loss stop", "state": "+$%.0f / -$%.0f" % (__import__("autopilot").limits()["daily_goal"], __import__("autopilot").limits()["daily_loss"])},
                                    {"name": "Circuit breaker", "state": "BLOCKS NEW ORDERS" if a["today"] <= -v["breaker"] else "ARMED"}]
             except broker.BrokerError as e:

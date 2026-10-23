@@ -10,6 +10,7 @@ import awake
 import broker
 import notify
 import research
+import swing
 
 LOCK = threading.Lock()
 EVENTS = []          # newest last; each has an increasing id
@@ -136,6 +137,9 @@ class Watcher:
                 if broker.configured() and market_open() and time.time() - self.t_scan >= 90:
                     self.t_scan = time.time()
                     self.scan()
+                if broker.configured() and market_open():
+                    from zoneinfo import ZoneInfo
+                    swing.tick(push, datetime.datetime.now(ZoneInfo("America/New_York")), WATCHLIST)   # swing trades, if she switched swing mode on
                 if broker.configured() and autopilot.is_on():
                     from zoneinfo import ZoneInfo
                     held = broker.positions()
@@ -232,9 +236,10 @@ class Watcher:
             if k not in live:
                 del self.peaks[k]
         self.closed &= live
+        mine = swing.symbols()   # swing trades have their own stops and exits
         for p in positions:
             sym = p["symbol"]
-            if sym in self.closed:
+            if sym in self.closed or sym in mine:
                 continue
             self.peaks[sym] = max(self.peaks.get(sym, 0.0), p["pl"])
             why = guard_reason(p, self.peaks[sym])

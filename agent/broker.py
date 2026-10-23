@@ -236,3 +236,22 @@ def history(period="1M"):
             continue
         out.append({"t": int(t), "equity": _f(eq), "pl": _f(pl)})
     return out
+
+
+def bars(symbols, days=120):
+    """Daily bars per symbol, oldest first: {SYM: [{t, o, h, l, c, v}]}. Free IEX data from the same keys."""
+    import datetime as _dt
+    syms = ",".join(sorted({str(x).upper() for x in symbols if str(x).strip()}))
+    start = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=int(days))).strftime("%Y-%m-%dT00:00:00Z")
+    out, token = {}, None
+    for _ in range(20):
+        q = "/v2/stocks/bars?symbols=%s&timeframe=1Day&start=%s&limit=10000&adjustment=split&feed=iex%s" % (
+            urllib.parse.quote(syms, safe=","), start, ("&page_token=" + urllib.parse.quote(token, safe="")) if token else "")
+        page = _req("GET", q, host="https://data.alpaca.markets") or {}
+        for sym, rows in (page.get("bars") or {}).items():
+            out.setdefault(sym, []).extend({"t": str(b.get("t", ""))[:10], "o": _f(b.get("o")), "h": _f(b.get("h")), "l": _f(b.get("l")),
+                                             "c": _f(b.get("c")), "v": _f(b.get("v"))} for b in rows or [])
+        token = page.get("next_page_token")
+        if not token:
+            break
+    return out

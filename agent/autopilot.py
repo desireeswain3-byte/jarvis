@@ -268,7 +268,11 @@ def consider(sym, d, rvol, push, now=None):
         st = _load()
         acct = broker.account()
         closed = closed_today_from(sc) if sc else {}
-        ok, size, why = decide(sym, d, rvol, acct, broker.positions(), st, broker.orders_today(), now, closed_today=closed)
+        import swing
+        if sym in swing.symbols():
+            return False   # held as a swing trade
+        day_pos = [p for p in broker.positions() if p["symbol"] not in swing.symbols()]
+        ok, size, why = decide(sym, d, rvol, acct, day_pos, st, broker.orders_today(), now, closed_today=closed)
         if not ok:
             if why.startswith("done for the day") and st.get("done_day") != now.date().isoformat():
                 st["done_day"], st["done_why"] = now.date().isoformat(), why[len("done for the day: "):]

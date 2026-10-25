@@ -115,7 +115,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 50;
+const UI_BUILD = 51;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -133,13 +133,19 @@ function paintStatus() {
   badge("#b-voice", status.voice.tts ? ((status.voice.engine === "kokoro" || status.voice.engine === "piper") ? "VOICE: LOCAL, FREE" : status.voice.engine === "mac" ? "VOICE: MAC, FREE" : "VOICE: ELEVENLABS") : "VOICE OFF", status.voice.tts ? "ok" : "bad");
   (status.problems || []).forEach((p) => alertBar("Setup problem: " + p));
 }
-async function loadStatus() {
+// Keeps trying until he answers, so a page opened while he restarts (or while the Mac wakes up) fixes itself.
+async function loadStatus(attempt) {
+  attempt = attempt || 0;
   try {
-    status = await (await fetch("/api/status")).json();
+    const r = await fetch("/api/status", { cache: "no-store" });
+    if (!r.ok) throw new Error("status " + r.status);
+    status = await r.json();
     window.__jarvisStatus = status;
     paintStatus();
+    if (attempt > 0) { $("#alert").hidden = true; loadGraph().catch(() => {}); }
   } catch (e) {
-    alertBar("Can't reach the JARVIS server.", "Is it still running in the terminal?");
+    if (attempt === 2) alertBar("Can't reach JARVIS on your Mac yet. Still trying.", "Make sure the Mac is awake, JARVIS is running, and on your phone Tailscale is Connected.");
+    setTimeout(() => loadStatus(attempt + 1), attempt < 10 ? 2000 : 5000);
   }
 }
 
@@ -776,7 +782,8 @@ function speechParts(text) {
 async function speak(text) {
   const token = ++speakToken;
   if (!text || !String(text).trim()) { resumeListening(); return; }   // silent commands: scroll, move, close
-  if (muted || !status || !status.voice.tts) {
+  if (!status) { resumeListening(); return; }   // not connected yet; loadStatus keeps retrying and says so
+  if (muted || !status.voice.tts) {
     if (!muted && !warnedTts) { warnedTts = true; alertBar("Voice output is off.", "Add ELEVENLABS_API_KEY to .env and restart. Replies are shown as text."); }
     resumeListening();
     return;

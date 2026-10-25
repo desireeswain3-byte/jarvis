@@ -7,7 +7,9 @@ if (typeof makeGrabbable === "undefined") window.makeGrabbable = function () {};
 const SILENCE_MS = 900;          // this much quiet after speech ends your turn and sends it
 const LEVEL_THRESHOLD = 0.02;    // RMS above this counts as you talking
 const MIN_SPEECH_MS = 300;       // shorter blips are discarded as noise
-const IDLE_RESTART_MS = 12000;   // restart the recorder if nobody talks for this long
+// iPhones and iPads pop each time the mic or a sound clip starts, so on them the mic stays steady and replies play in fewer pieces.
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IDLE_RESTART_MS = IS_IOS ? 60000 : 12000;   // restart the recorder if nobody talks for this long
 const SILENT_MIC_WARN_MS = 6000; // warn if the mic is open but flat for this long
 const POLL_MS = 33;              // audio level loop (setInterval, not requestAnimationFrame)
 const EXAMPLES = [
@@ -113,7 +115,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 48;
+const UI_BUILD = 49;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -608,7 +610,7 @@ function onRecStop(r) {
 function pauseRecorder() {
   deaf = true;
   srStop();
-  if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+  if (stream && !IS_IOS) stream.getAudioTracks().forEach((t) => { t.enabled = false; });   // on iPhone the mic stays on (no pop); "deaf" already ignores it
   if (rec && rec.state !== "inactive") { endMode = "discard"; rec.stop(); }
 }
 async function transcribeAndAsk(blob) {
@@ -766,7 +768,7 @@ function speechParts(text) {
     if (!s) continue;
     const last = out[out.length - 1];
     // first piece: one sentence (merge a tiny opener like "Certainly." with the next); later pieces: up to about 220 characters
-    if (last !== undefined && ((out.length === 1 && last.length < 25) || (out.length > 1 && last.length + s.length < 220))) out[out.length - 1] = last + " " + s;
+    if (last !== undefined && ((out.length === 1 && last.length < 25) || (out.length > 1 && last.length + s.length < (IS_IOS ? 4000 : 220)))) out[out.length - 1] = last + " " + s;
     else out.push(s);
   }
   return out.length ? out : [String(text)];

@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 47   # shown in the top bar so you can see which update is running
+BUILD = 48   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -206,9 +206,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         try:
-            raw = self.read_body()
+            raw = self.read_body(200 * 1024 * 1024 if path == "/api/learn_file" else 25 * 1024 * 1024)
         except ValueError as e:
-            return self.send_json(413, {"error": str(e)})
+            return self.send_json(413, {"error": "That file is too big. Videos up to 200 MB work." if path == "/api/learn_file" else str(e)})
         try:
             if path == "/api/ask":
                 return self.api_ask(json.loads(raw or b"{}"))
@@ -226,6 +226,22 @@ class Handler(BaseHTTPRequestHandler):
                 import research
                 body = json.loads(raw or b"{}")
                 return self.send_json(200, research.learn(S.toolbox, body.get("text", ""), body.get("source", "")))
+            if path == "/api/learn_file":
+                # A video or audio file she dropped into Teach: transcribe it, then study it like a pasted transcript.
+                if self.headers.get("X-Jarvis") != "1":
+                    return self.send_json(403, {"ok": False, "error": "not allowed"})
+                import research
+                from urllib.parse import unquote
+                source = unquote(self.headers.get("X-Source", "") or "")[:200] or "video"
+                try:
+                    text = voice.transcribe(raw, self.headers.get("Content-Type", "video/mp4"), timeout=600)
+                except voice.VoiceError as e:
+                    return self.send_json(200, {"ok": False, "say": "I could not listen to that file: %s" % str(e)[:200]})
+                if len(text) < 200:
+                    return self.send_json(200, {"ok": False, "say": "I listened, but there was almost no talking in it, so there was nothing to learn. If the lesson is only on screen, tell me what it shows."})
+                out = research.learn(S.toolbox, text, source)
+                out["heard"] = text[:600]
+                return self.send_json(200, out)
             if path == "/api/restart":
                 self.send_json(200, {"ok": True})
                 threading.Timer(0.5, lambda: os.execv(sys.executable, [sys.executable] + sys.argv)).start()

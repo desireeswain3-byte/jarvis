@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 47;
+const UI_BUILD = 48;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;
@@ -881,6 +881,31 @@ $("#b-memory").addEventListener("click", async () => {
   txt.addEventListener("input", upd);
   $("#b-teach").addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) txt.focus(); });
   $("#teach-cancel").addEventListener("click", () => { box.hidden = true; });
+  // Video or audio files (a saved TikTok, a voice memo): he listens to the whole thing, then studies it.
+  async function learnFiles(files) {
+    const list = Array.from(files || []).filter((f) => /^(video|audio)\//.test(f.type) || /\.(mp4|mov|m4a|mp3|wav|webm)$/i.test(f.name));
+    if (!list.length) { alertBar("That is not a video or audio file.", "Drop an .mp4, .mov, .m4a or .mp3 file."); return; }
+    go.disabled = true;
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      go.textContent = "Listening " + (i + 1) + " of " + list.length + "...";
+      setCaption("Listening to " + f.name + ". This takes about a minute.", "JARVIS:");
+      try {
+        const r = await fetch("/api/learn_file", { method: "POST", headers: { "Content-Type": f.type || "video/mp4", "X-Jarvis": "1", "X-Source": encodeURIComponent((src.value.trim() || f.name.replace(/\.[^.]+$/, ""))) }, body: f });
+        const j = await r.json();
+        if (j.say) { setCaption(j.say, "JARVIS:"); await speak(j.say); }
+        if (!r.ok && j.error) alertBar("That file did not work.", j.error);
+      } catch (e) { alertBar("I could not send that file.", e.message); }
+    }
+    go.disabled = false; go.textContent = "Learn it";
+    loadGraph().catch(() => {});
+  }
+  const fileIn = $("#teach-file");
+  $("#teach-pick").addEventListener("click", () => fileIn.click());
+  fileIn.addEventListener("change", () => { learnFiles(fileIn.files); fileIn.value = ""; });
+  box.addEventListener("dragover", (e) => { e.preventDefault(); box.classList.add("drop"); });
+  box.addEventListener("dragleave", () => box.classList.remove("drop"));
+  box.addEventListener("drop", (e) => { e.preventDefault(); box.classList.remove("drop"); if (e.dataTransfer && e.dataTransfer.files.length) learnFiles(e.dataTransfer.files); });
   go.addEventListener("click", async () => {
     const text = txt.value.trim();
     if (!text) { txt.focus(); return; }

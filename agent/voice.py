@@ -375,7 +375,7 @@ def speak(text, voice_id=None, speed=None):
         return r.read(), "audio/mpeg"
 
 
-def transcribe(audio, content_type):
+def transcribe(audio, content_type, timeout=120):
     """Audio bytes in, transcript text out, via Scribe."""
     if not available():
         raise VoiceError("ELEVENLABS_API_KEY is not set in .env, so the transcriber is off.")
@@ -383,7 +383,8 @@ def transcribe(audio, content_type):
         raise VoiceError("Empty recording.")
     boundary = "----jarvis" + uuid.uuid4().hex
     ct = (content_type or "audio/webm").split(";")[0]
-    ext = {"audio/mp4": "mp4", "audio/ogg": "ogg", "audio/wav": "wav", "audio/mpeg": "mp3"}.get(ct, "webm")
+    ext = {"audio/mp4": "mp4", "audio/ogg": "ogg", "audio/wav": "wav", "audio/mpeg": "mp3", "video/mp4": "mp4", "video/quicktime": "mov",
+           "audio/x-m4a": "m4a", "audio/m4a": "m4a", "video/webm": "webm", "audio/aac": "aac"}.get(ct, "webm")
     parts = [
         ("--%s\r\nContent-Disposition: form-data; name=\"model_id\"\r\n\r\nscribe_v1\r\n" % boundary).encode(),
         ("--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.%s\"\r\nContent-Type: %s\r\n\r\n" % (boundary, ext, ct)).encode(),
@@ -393,7 +394,7 @@ def transcribe(audio, content_type):
     req = urllib.request.Request(
         API + "/v1/speech-to-text", data=b"".join(parts), method="POST",
         headers={"xi-api-key": key(), "Content-Type": "multipart/form-data; boundary=" + boundary})
-    with _open(req, timeout=120) as r:
+    with _open(req, timeout=timeout) as r:
         try:
             return (json.loads(r.read().decode("utf-8")).get("text") or "").strip()
         except ValueError:

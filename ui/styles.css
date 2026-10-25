@@ -322,3 +322,5 @@ body.holo::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-
   #viewer, body.companion #viewer { left: 0.5rem; right: 0.5rem; top: calc(3rem + env(safe-area-inset-top)); bottom: calc(10rem + env(safe-area-inset-bottom)); }
   #alert { top: calc(3rem + env(safe-area-inset-top)); max-width: calc(100vw - 1rem); }
 }
+
+#teach.drop { border-color: var(--accent); box-shadow: 0 0 2rem rgba(var(--glow), 0.5); }

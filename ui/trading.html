@@ -65,8 +65,8 @@ input { width:100%; background:#000; color:var(--ink); border:1px solid var(--li
 </header>
 <main>
   <div class="panel c4"><div class="k">VAULT EQUITY</div><div class="v" id="eq">...</div><div class="s" id="today"></div></div>
-  <div class="panel c4"><div class="k">CIRCUIT BREAKER LIMIT</div><div class="v" id="brk">...</div><div class="s up">Status: ARMED</div></div>
-  <div class="panel c4"><div class="k">AUTO CASH SWEEP</div><div class="v" id="swp">...</div><div class="s">Threshold set</div></div>
+  <div class="panel c4"><div class="k" id="brk-k">CIRCUIT BREAKER LIMIT</div><div class="v" id="brk">...</div><div class="s up" id="brk-s">Status: ARMED</div></div>
+  <div class="panel c4"><div class="k" id="swp-k">AUTO CASH SWEEP</div><div class="v" id="swp">...</div><div class="s" id="swp-s">Threshold set</div></div>
 
   <div class="panel c8">
     <h3 id="pipe-h">MASTER TRADER PIPELINE</h3>
@@ -152,6 +152,8 @@ async function load() {
     m.textContent = { sample: "SIMULATED DEMO, NOT LIVE", paper: "PRACTICE ACCOUNT, FAKE MONEY", live: "LIVE ACCOUNT, REAL MONEY" }[c.source] || "SIMULATED DEMO, NOT LIVE";
     m.className = "pill" + (c.source === "live" ? " live" : "");
     $("#eq").textContent = c.equity; $("#brk").textContent = c.breaker; $("#swp").textContent = c.sweep;
+    $("#brk-k").textContent = c.breaker_label || "CIRCUIT BREAKER LIMIT (DEMO)"; $("#brk-s").textContent = c.breaker_sub || "Status: ARMED";
+    $("#swp-k").textContent = c.sweep_label || "AUTO CASH SWEEP (DEMO)"; $("#swp-s").textContent = c.sweep_sub || "Threshold set";
     const eqN = parseFloat(String(c.equity).replace(/[^0-9.]/g, "")) || 0, tdN = parseFloat(String(c.today).replace(/[^0-9.]/g, "")) || 0;
     const pct = eqN ? (tdN / (eqN - (String(c.today).startsWith("-") ? -tdN : tdN)) * 100) : 0;
     $("#today").textContent = c.today + " (" + (String(c.today).startsWith("-") ? "-" : "+") + pct.toFixed(2) + "%)" + (sim ? " sample" : ""); $("#today").className = "s " + (String(c.today).startsWith("-") ? "neg" : "up");

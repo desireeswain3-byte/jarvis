@@ -113,7 +113,7 @@ function badge(id, text, cls) {
   b.textContent = text;
   b.className = "badge " + (cls || "");
 }
-const UI_BUILD = 46;
+const UI_BUILD = 47;
 function paintStatus() {
   if (status && $("#b-build")) {
     const sb = status.build || 0;

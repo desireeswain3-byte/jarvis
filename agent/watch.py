@@ -176,7 +176,7 @@ class Watcher:
                     push("fill", "%s: your %s order for %s filled, %s." % (label, o["side"].lower(), o["symbol"], _money(o["size"])))
         self.orders = {i: o["status"] for i, o in cur.items()}
         acct = broker.account()
-        limit = float(self.tb.trading.get("breaker", 50.0))
+        limit = self.tb.breaker_limit(acct)
         tripped = acct["today"] <= -limit
         if self.breaker_on is not None and tripped and not self.breaker_on:
             push("alert", "Circuit breaker tripped. Today is down %s, so I am blocking new orders." % _money(acct["today"]))

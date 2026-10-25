@@ -768,6 +768,19 @@ class Toolbox:
                     "facts": wrap_data("vault", "Candidates: " + "; ".join(c["file"] for c in r["choices"])), "actions": []}
         return self._action("Nothing called that in the files.", [], "no note matched: " + q)
 
+    def breaker_limit(self, acct=None):
+        """The real daily loss stop in dollars: the smallest of the breaker setting and autopilot's daily loss limits,
+        so the screen, manual orders and autopilot all stop at the same place."""
+        lim = float(self.trading["breaker"])
+        if broker.configured():
+            import autopilot
+            al = autopilot.limits()
+            lim = min(lim, al["daily_loss"])
+            eq = float((acct or {}).get("equity", 0) or 0)
+            if eq > 0:
+                lim = min(lim, eq * al["daily_loss_pct"] / 100.0)
+        return round(lim, 2)
+
     def _trading_card(self):
         v = self.trading
         card = {"kind": "trading", "source": "sample", "breaker": "-$%s" % format(v["breaker"], ",.2f"), "sweep": "$%s" % format(v["sweep"], ",.2f"),
@@ -777,6 +790,13 @@ class Toolbox:
             try:
                 a = broker.account()
                 card["source"] = broker.mode()
+                stop = self.breaker_limit(a)
+                card["breaker"] = "-$%s" % format(stop, ",.2f")
+                card["breaker_label"] = "DAILY LOSS STOP"
+                card["breaker_sub"] = "Stops new buys today at this loss" if a["today"] > -stop else "Reached: no new buys today"
+                card["sweep"] = "$%s" % format(a["cash"], ",.2f")
+                card["sweep_label"] = "CASH READY TO TRADE"
+                card["sweep_sub"] = "Available for the next trade"
                 card["equity"] = "$%s" % format(a["equity"], ",.2f")
                 card["today"] = "%s$%s today" % ("+" if a["today"] >= 0 else "-", format(abs(a["today"]), ",.2f"))
                 card["trades"] = [{"time": o["time"], "symbol": o["symbol"], "rank": "", "action": o["side"], "size": o["size"], "status": o["status"]} for o in broker.orders(8)]
@@ -787,7 +807,7 @@ class Toolbox:
                                    {"name": "Autopilot", "state": ("ON (%s)" % ("practice" if broker.mode() == "paper" else "LIVE")) if __import__("autopilot").is_on() else "OFF"},
                                    {"name": "Swing mode", "state": ("ON (%d held)" % len(__import__("swing").symbols())) if __import__("swing").is_on() else ("OFF, managing %d" % len(__import__("swing").symbols()) if __import__("swing").symbols() else "OFF")},
                                    {"name": "Daily goal / loss stop", "state": "+$%.0f / -$%.0f" % (__import__("autopilot").limits()["daily_goal"], __import__("autopilot").limits()["daily_loss"])},
-                                   {"name": "Circuit breaker", "state": "BLOCKS NEW ORDERS" if a["today"] <= -v["breaker"] else "ARMED"}]
+                                   {"name": "Circuit breaker", "state": "BLOCKS NEW ORDERS" if a["today"] <= -stop else "ARMED at -$%.2f" % stop}]
             except broker.BrokerError as e:
                 card["note"] = "Broker not reachable, showing sample data. " + str(e)
         return card
@@ -823,7 +843,7 @@ class Toolbox:
                 acc = broker.account()
                 if acc["blocked"]:
                     return {"say": "The broker has trading blocked on this account.", "card": None, "facts": "account blocked", "actions": []}
-                if acc["today"] <= -self.trading["breaker"]:
+                if acc["today"] <= -self.breaker_limit(acc):
                     return {"say": "The circuit breaker is tripped. No new orders today.", "card": None, "facts": "Refused: circuit breaker tripped.", "actions": []}
                 if broker.orders_today() >= broker.max_orders_per_day():
                     return {"say": "That is today's order limit.", "card": None, "facts": "Refused: orders per day limit reached.", "actions": []}
@@ -970,7 +990,7 @@ class Toolbox:
         if p["mode"] != broker.mode():
             raise broker.BrokerError("The account mode changed. Ask me again.")
         acc = broker.account()
-        if acc["today"] <= -self.trading["breaker"]:
+        if acc["today"] <= -self.breaker_limit(acc):
             raise broker.BrokerError("The circuit breaker is tripped. No new orders today.")
         o = broker.place(p["symbol"], p["side"], p["amount"])
         return {"say": "%s order for %s dollars of %s sent to the %s account. Status %s." % (p["side"].capitalize(), "%g" % p["amount"], p["symbol"],

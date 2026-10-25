@@ -116,11 +116,22 @@ def positions():
     return out
 
 
+def _local_time(iso):
+    """The broker gives times in UTC; show them in her own time, with the day if it was not today."""
+    import datetime as _dt
+    try:
+        t = _dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
+    except (ValueError, AttributeError):
+        return iso[11:19] if len(iso or "") >= 19 else (iso or "")
+    clock = t.strftime("%I:%M %p").lstrip("0")
+    return clock if t.date() == _dt.date.today() else t.strftime("%a ") + clock
+
+
 def orders(limit=8):
     out = []
     for o in _req("GET", "/v2/orders?status=all&direction=desc&limit=%d" % int(limit)) or []:
         when = str(o.get("submitted_at") or o.get("created_at") or "")
-        out.append({"id": str(o.get("id", "")), "time": when[11:19] if len(when) >= 19 else when, "symbol": str(o.get("symbol", "")),
+        out.append({"id": str(o.get("id", "")), "time": _local_time(when), "symbol": str(o.get("symbol", "")),
                     "side": str(o.get("side", "")).upper(), "size": _f(o.get("notional")) or _f(o.get("filled_avg_price")) * _f(o.get("filled_qty")),
                     "status": str(o.get("status", "")).upper().replace("_", " ")})
     return out

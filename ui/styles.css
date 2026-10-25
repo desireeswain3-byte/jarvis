@@ -324,3 +324,22 @@ body.holo::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-
 }
 
 #teach.drop { border-color: var(--accent); box-shadow: 0 0 2rem rgba(var(--glow), 0.5); }
+
+/* ---------- Phone turned sideways: short screen, so only him, his words and the mic ---------- */
+@media (max-height: 540px) and (pointer: coarse) {
+  #left, #right, #hud-left, #hud-right, #graph-labels, #transcript, #topbar .brand, #handcam, #b-holo { display: none !important; }
+  #graph { opacity: 0.1 !important; }
+  #topbar .badges > .badge { display: none; }
+  #topbar .badges > #b-build.bad, #topbar .badges > #b-model.bad { display: inline-block; }
+  #orb, body.companion #orb { --orbw: 8rem; width: 8rem !important; right: calc(1rem + env(safe-area-inset-right)) !important; left: auto !important; top: 1rem !important; bottom: auto !important; transform: none !important; translate: none !important; }
+  #orb canvas, body.companion #orb canvas { width: 8rem; height: 8rem; }
+  #caption, body.companion #caption { left: calc(1rem + env(safe-area-inset-left)); right: 11rem; transform: none; max-width: none; bottom: 5rem; text-align: left; }
+  #askbar, body.companion #askbar { left: calc(0.75rem + env(safe-area-inset-left)); right: calc(0.75rem + env(safe-area-inset-right)); width: auto; transform: none; bottom: calc(0.5rem + env(safe-area-inset-bottom)); flex-wrap: nowrap; }
+  #askbar #ask, body.companion #askbar #ask { flex: 1 1 auto; min-width: 0; font-size: 16px; }
+  #askbar button, body.companion #askbar button:not(#b-mic) { display: none; }
+  #askbar #b-mic, body.companion #askbar #b-mic { display: block; flex: 0 0 auto; padding: 0.5rem 1.5rem; }
+  body.companion #askbar button#b-trading, body.companion #askbar button#b-brief, body.companion #askbar button#b-mute,
+  #askbar #b-trading, #askbar #b-brief, #askbar #b-mute { display: block; flex: 0 0 auto; }
+  #tray, body.companion #tray { left: calc(0.75rem + env(safe-area-inset-left)); right: 10rem; top: 1rem; bottom: 5.5rem; max-height: none; flex-direction: column; align-items: stretch; justify-content: flex-start; overflow-y: auto; overflow-x: hidden; }
+  .card { flex: 0 0 auto; min-width: 0; width: 100%; max-height: none; translate: none !important; }
+}

@@ -43,8 +43,11 @@ def _send(subject, body):
 def push(title, body, urgent=False, topic=None):
     server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
     topic = topic or os.environ.get("NTFY_TOPIC", "").strip()
-    req = urllib.request.Request(server + "/" + topic, data=body.encode("utf-8"), method="POST",
-                                 headers={"Title": title.encode("ascii", "ignore").decode(), "Priority": "high" if urgent else "default", "Tags": "robot"})
+    headers = {"Title": title.encode("ascii", "ignore").decode(), "Priority": "high" if urgent else "default", "Tags": "robot"}
+    host = os.environ.get("JARVIS_ALLOWED_HOSTS", "").split(",")[0].strip()
+    if host:
+        headers["Click"] = "https://%s/trading.html" % host     # tapping the notification opens his Trading screen
+    req = urllib.request.Request(server + "/" + topic, data=body.encode("utf-8"), method="POST", headers=headers)
     with urllib.request.urlopen(req, timeout=15) as r:
         r.read()
 

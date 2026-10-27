@@ -81,6 +81,22 @@ input { width:100%; background:#000; color:var(--ink); border:1px solid var(--li
   <div class="panel c6"><h3>OPEN POSITIONS</h3><div id="pos" class="s">None</div></div>
   <div class="panel c6"><h3 id="shield-h">RISK SHIELDS</h3><div id="shields"></div></div>
 
+  <div class="panel c12" id="rule">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3 style="margin:0">HOW JARVIS IS LEARNING</h3>
+      <button id="rule-test" type="button" title="Backtest every rule on the last 40 trading days">Test the rules now</button>
+    </div>
+    <div class="s" style="margin:.4rem 0 .8rem">He trades one rule at a time. Every week he tests every rule on real past prices, and only asks to switch when a better one held up. Nothing changes until you approve. Past results do not promise future ones.</div>
+    <div class="k">TRADING NOW</div><div id="rule-now" style="font:600 1rem var(--mono);color:var(--accent);margin:.2rem 0 .8rem">...</div>
+    <div id="rule-prop" hidden style="border:1px solid var(--accent);border-radius:.6rem;padding:.8rem;margin-bottom:.8rem">
+      <div class="k">A BETTER RULE IS WAITING FOR YOU</div>
+      <div id="rule-why" style="margin:.4rem 0 .7rem;line-height:1.5"></div>
+      <button id="rule-yes" class="go" type="button">Approve</button> <button id="rule-no" type="button">Keep the current rule</button>
+    </div>
+    <div class="k" id="rule-k">LAST WEEKLY TEST</div>
+    <table><thead><tr><th>RULE</th><th>TRADES</th><th>WON</th><th>TOTAL</th><th>PER TRADE</th><th>HELD UP</th></tr></thead><tbody id="rule-rows"><tr><td colspan="6" class="s">Not tested yet.</td></tr></tbody></table>
+  </div>
+
   <div class="panel c12" id="sc">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
       <h3 style="margin:0">PRACTICE SCORECARD</h3>
@@ -252,6 +268,34 @@ async function feed() {
   } catch (e) { /* retry */ }
 }
 setInterval(feed, 8000); feed();
+async function loadRule() {
+  try {
+    const j = await (await fetch("/api/strategy")).json();
+    $("#rule-now").textContent = j.rule + (j.testing ? "   (testing now...)" : "");
+    const p = j.proposal;
+    $("#rule-prop").hidden = !p;
+    if (p) $("#rule-why").textContent = p.why;
+    const t = j.last_test;
+    if (t && t.table) {
+      $("#rule-k").textContent = "LAST WEEKLY TEST: " + t.date + ", " + t.days + " TRADING DAYS, " + t.symbols + " STOCKS";
+      $("#rule-rows").innerHTML = t.table.slice().sort((a, b) => b.whole.total - a.whole.total).map((r) =>
+        "<tr><td>" + esc(r.rule) + "</td><td>" + r.whole.trades + "</td><td>" + r.whole.win_rate.toFixed(0) + "%</td><td class='" + (r.whole.total >= 0 ? "up" : "neg") + "'>" +
+        (r.whole.total >= 0 ? "+" : "-") + money(Math.abs(r.whole.total)) + "</td><td>" + (r.whole.expectancy >= 0 ? "+" : "-") + (Math.abs(r.whole.expectancy) * 100).toFixed(1) + "c</td><td>" + (r.held_up ? "yes" : "no") + "</td></tr>").join("");
+    }
+  } catch (e) { /* the panel just waits */ }
+}
+async function ruleAct(action, ev) {
+  if (ev && !ev.isTrusted) return;   // only a real click can approve
+  try {
+    const j = await (await fetch("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json", "X-Jarvis": "1" }, body: JSON.stringify({ action }) })).json();
+    alert(j.say);
+  } catch (e) { alert("That did not go through: " + e.message); }
+  loadRule();
+}
+$("#rule-yes").addEventListener("click", (e) => ruleAct("approve", e));
+$("#rule-no").addEventListener("click", (e) => ruleAct("reject", e));
+$("#rule-test").addEventListener("click", (e) => ruleAct("test", e));
+setInterval(loadRule, 30000); loadRule();
 setInterval(load, 30000); load();
 $("#refresh").addEventListener("click", () => { load(); scorecard(); });
 

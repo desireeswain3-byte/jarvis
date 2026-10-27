@@ -7,6 +7,7 @@ import time
 
 import autopilot
 import awake
+import coach
 import broker
 import notify
 import research
@@ -131,6 +132,7 @@ class Watcher:
             try:
                 research.tick(self.tb, push)   # morning research before the open, evening review after the close
                 awake.tick(push)               # stay awake with the lid closed during the trading day
+                coach.tick(push)               # weekly rule test and proposal
             except Exception:  # noqa: BLE001
                 pass
             try:
@@ -145,6 +147,8 @@ class Watcher:
                     held = broker.positions()
                     if market_open():
                         autopilot.sell_leftovers(held, push)   # anything still held from a day the Mac slept through the close
+                        autopilot.scan_tick(push)              # the chosen rule, across the day's most active stocks
+                        autopilot.take_profits(held, push)
                     autopilot.protect(held, push)   # a stop loss at the broker under each new autopilot buy
                     if autopilot.flatten_due(datetime.datetime.now(ZoneInfo("America/New_York"))):
                         autopilot.flatten(held, push)
@@ -266,8 +270,6 @@ class Watcher:
             if abs(d["pct"]) >= 2.0 and (rvol >= 1.5 or rvol == 0.0) and key not in self.flagged:
                 self.flagged.add(key)
                 push("signal", signal_text(sym, d, rvol))
-                if d["pct"] > 0:
-                    autopilot.consider(sym, d, rvol, push)   # only if she switched it on, and live only after the practice run passed
 
     def sim_step(self):
         """Demo only: makes up a pipeline move so the feed can be seen working. Never touches any account."""

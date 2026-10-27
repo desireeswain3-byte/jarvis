@@ -149,3 +149,9 @@ Everyday questions stay quick. Say "think hard", "deep dive", "in depth" or "tak
 ## On your phone
 - **Alerts:** `python3 agent/setup_alerts.py` emails you every buy, sell, stop and the end-of-day summary (Gmail App Password, asked in a pop-up box). The Gmail app on your phone buzzes for each one.
 - **JARVIS on your iPhone:** install Tailscale on the Mac and the iPhone, sign in to both, then run `bash scripts/setup_phone.sh`. It prints a private https link that only your own devices can open. Open it in Safari, then Share, Add to Home Screen. JARVIS still runs on the Mac, so the Mac has to be awake.
+
+## How JARVIS learns to trade better
+- **More chances:** autopilot scans the day's ~50 most active stocks (from Alpaca, with a built-in backup list) instead of only the watchlist.
+- **Rules from her videos:** `momentum`, `orb15` (15 minute opening range close) and `engulf` (engulfing candle after a 15 minute close above a key level), each with its own stop and a 2R target. Defined once in `agent/strategies.py` and used by both live trading and the backtester.
+- **Backtester:** `agent/backtest.py` replays the last 40 trading days, 5 minutes at a time, buying at the next candle's open with slippage and counting a candle that touches both stop and target as a loss.
+- **Weekly learning loop:** `agent/coach.py` tests every rule each Friday evening (or on demand), and proposes a switch only if a rule held up on both older and newer days. Nothing changes until she taps **Approve** on the Trading screen or says so. Set `LEARNING_LOOP=off` to stop it.

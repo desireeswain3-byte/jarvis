@@ -43,7 +43,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 MAX_TURNS = 10
 
 
-BUILD = 51   # shown in the top bar so you can see which update is running
+BUILD = 52   # shown in the top bar so you can see which update is running
 ORB = {"state": "idle", "caption": "", "move": "", "move_seq": 0, "seen": 0.0}   # what the see-through overlay shows
 
 
@@ -151,6 +151,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"voices": voice.list_voices(), "default": voice.default_voice()})
             except voice.VoiceError as e:
                 return self.send_json(503, {"error": str(e)})
+        if u.path == "/api/strategy":
+            import coach
+            cfg = coach.load()
+            n, prm = coach.current()
+            return self.send_json(200, {"rule": coach.describe(n, prm), "name": n, "last_test": cfg.get("last_test"), "proposal": cfg.get("proposal"), "history": (cfg.get("history") or [])[-5:], "testing": coach.BUSY.locked()})
         if u.path == "/api/holo":
             import holo
             return self.send_json(200, {"bubbles": holo.bubbles(S.vault), "props": holo.props()})
@@ -226,6 +231,19 @@ class Handler(BaseHTTPRequestHandler):
                 import research
                 body = json.loads(raw or b"{}")
                 return self.send_json(200, research.learn(S.toolbox, body.get("text", ""), body.get("source", "")))
+            if path == "/api/strategy":
+                # Approve or keep, from the button on the Trading screen. Same header guard as Update.
+                if self.headers.get("X-Jarvis") != "1":
+                    return self.send_json(403, {"ok": False, "error": "not allowed"})
+                import coach
+                act = json.loads(raw or b"{}").get("action")
+                if act == "test":
+                    if coach.BUSY.locked():
+                        return self.send_json(200, {"ok": False, "say": "I am already testing."})
+                    threading.Thread(target=lambda: coach.weekly(watch.push), daemon=True).start()
+                    return self.send_json(200, {"ok": True, "say": "Testing every rule on the last 40 trading days. I will tell you what I find in a few minutes."})
+                ok, msg = coach.approve() if act == "approve" else coach.reject()
+                return self.send_json(200, {"ok": ok, "say": msg})
             if path == "/api/learn_file":
                 # A video or audio file she dropped into Teach: transcribe it, then study it like a pasted transcript.
                 if self.headers.get("X-Jarvis") != "1":

@@ -170,7 +170,19 @@ def day_stop(acct, closed_today, lim=None):
 
 
 def decide(sym, d, rvol, acct, positions, state, orders_today, now, lim=None, closed_today=None):
-    """Pure rule check. Returns (True, dollars, reason) or (False, 0, why_not). No network, so it can be tested."""
+    """Momentum check plus all the limits. Returns (True, dollars, reason) or (False, 0, why_not). No network."""
+    lim = lim or limits()
+    if d["pct"] < lim["min_move"]:
+        ok, _, why = limits_ok(sym, acct, positions, state, orders_today, now, lim, closed_today)
+        return (False, 0.0, why) if not ok and why.startswith(("paused", "done for", "outside")) else (False, 0.0, "not up enough")
+    if not rvol or rvol < lim["min_rvol"]:
+        return False, 0.0, "volume is not above normal"
+    ok, size, why = limits_ok(sym, acct, positions, state, orders_today, now, lim, closed_today)
+    return (True, size, "up %.1f%% on %.1fx volume" % (d["pct"], rvol)) if ok else (False, 0.0, why)
+
+
+def limits_ok(sym, acct, positions, state, orders_today, now, lim=None, closed_today=None):
+    """Every guardrail except the entry rule itself. Returns (True, dollars, "") or (False, 0, why_not). No network."""
     lim = lim or limits()
     closed_today = closed_today or {}
     today = now.date().isoformat()
@@ -184,10 +196,6 @@ def decide(sym, d, rvol, acct, positions, state, orders_today, now, lim=None, cl
         return False, 0.0, "done for the day: " + str(state.get("done_why", ""))
     if now.weekday() >= 5 or since_open < lim["wait_min"] or since_open >= 390 - lim["flatten_min"]:
         return False, 0.0, "outside my trading window"
-    if d["pct"] < lim["min_move"]:
-        return False, 0.0, "not up enough"
-    if not rvol or rvol < lim["min_rvol"]:
-        return False, 0.0, "volume is not above normal"
     if sym in held or sym in bought:
         return False, 0.0, "already traded today"
     if len(held) >= lim["max_positions"]:
@@ -207,7 +215,7 @@ def decide(sym, d, rvol, acct, positions, state, orders_today, now, lim=None, cl
     size = round(min(broker.max_order(), equity * lim["trade_pct"] / 100.0, float(acct.get("cash", equity) or equity)), 2)
     if size < 1:
         return False, 0.0, "not enough cash for the smallest order"
-    return True, size, "up %.1f%% on %.1fx volume" % (d["pct"], rvol)
+    return True, size, ""
 
 
 def closed_today_from(score):
@@ -313,7 +321,10 @@ def protect(positions, push):
         entry = p.get("entry") or ((p.get("cost") or 0) / p["qty"] if p.get("qty") else 0)
         if not entry or p.get("qty", 0) <= 0:
             continue
+        plan = (st.get("plans") or {}).get(sym)
         price = entry * (1 - lim["stop_pct"] / 100.0)
+        if plan and plan.get("stop"):
+            price = max(price, entry - (plan["entry"] - plan["stop"]))   # same distance as planned, from the real fill
         try:
             o = broker.place_stop(sym, p["qty"], price)
             stops[sym] = str(o.get("id", "")) or "placed"
@@ -395,3 +406,128 @@ def flatten(positions, push):
                 push("autopilot", "Autopilot, %s: sold %s before the close. Result about %s$%.2f. Next step: look at it in your journal." % (_label(), p["symbol"], "-" if p["pl"] < 0 else "+", abs(p["pl"])))
             except Exception as e:  # noqa: BLE001
                 push("alert", "Autopilot tried to sell %s before the close but failed: %s. Please check it." % (p["symbol"], str(e)[:100]))
+
+
+# ---------------- live trading with the chosen rule (coach.py picks it, strategies.py defines it) ----------------
+
+_prev = {"day": None, "data": {}}
+_last_scan = [0.0]
+
+
+def _today_bars(symbols, now):
+    """Today's completed 5 minute bars per symbol, in New York time."""
+    import urllib.parse
+    import backtest
+    start = now.replace(hour=9, minute=30, second=0, microsecond=0).astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    got, token = {}, None
+    for _ in range(20):
+        q = "/v2/stocks/bars?symbols=%s&timeframe=5Min&start=%s&limit=10000&feed=iex%s" % (
+            urllib.parse.quote(",".join(symbols), safe=","), start, ("&page_token=" + urllib.parse.quote(token, safe="")) if token else "")
+        page = broker._req("GET", q, host="https://data.alpaca.markets") or {}
+        for sym, rows in (page.get("bars") or {}).items():
+            got.setdefault(sym, []).extend(rows or [])
+        token = page.get("next_page_token")
+        if not token:
+            break
+    cutoff = now.replace(tzinfo=None) - datetime.timedelta(minutes=5)     # a bar is complete once its 5 minutes are over
+    return {sym: [b for b in backtest._parse(rows) if b["t"] <= cutoff] for sym, rows in got.items()}
+
+
+def _prev_day(symbols, now):
+    day = now.date().isoformat()
+    if _prev["day"] != day or not _prev["data"]:
+        out = {}
+        for sym, rows in broker.bars(symbols, 10).items():
+            before = [r for r in rows if r["t"] < day]
+            if before:
+                r = before[-1]
+                out[sym] = {"h": r["h"], "l": r["l"], "c": r["c"], "v": r["v"]}
+        _prev.update(day=day, data=out)
+    return _prev["data"]
+
+
+def find_signals(bars, prevs, name, params, skip=()):
+    """Pure: the plans the chosen rule gives right now, best (tightest stop) first."""
+    import strategies
+    out = []
+    for sym, b in bars.items():
+        if sym in skip or not b:
+            continue
+        plan = strategies.signal(name, b, prevs.get(sym), params)
+        if plan:
+            out.append((plan["entry"] and (plan["entry"] - plan["stop"]) / plan["entry"], sym, plan))
+    return [(sym, plan) for _, sym, plan in sorted(out)]
+
+
+def scan_tick(push, now=None):
+    """About once a minute while the market is open: look for the chosen rule's setups across the active stocks and buy."""
+    if not is_on() or time.time() - _last_scan[0] < 60:
+        return
+    _last_scan[0] = time.time()
+    try:
+        from zoneinfo import ZoneInfo
+        import coach
+        import swing
+        import scorecard
+        now = now or datetime.datetime.now(ZoneInfo("America/New_York"))
+        name, params = coach.current()
+        st = _load()
+        today = now.date().isoformat()
+        traded = set(st.get("bought", [])) if st.get("day") == today else set()
+        syms = coach.universe()
+        bars = _today_bars(syms, now)
+        prevs = _prev_day(syms, now)
+        held_swing = swing.symbols()
+        for sym, plan in find_signals(bars, prevs, name, params, skip=traded | held_swing):
+            try:
+                sc = scorecard.fetch()
+            except Exception:  # noqa: BLE001
+                sc = {}
+            if sc and review(sc, push):
+                return
+            acct = broker.account()
+            day_pos = [p for p in broker.positions() if p["symbol"] not in held_swing]
+            ok, size, why = limits_ok(sym, acct, day_pos, st, broker.orders_today(), now, closed_today=closed_today_from(sc) if sc else {})
+            if not ok:
+                if why.startswith("done for the day") and st.get("done_day") != today:
+                    st["done_day"], st["done_why"] = today, why[len("done for the day: "):]
+                    _save(st)
+                    push("autopilot", "Autopilot, %s: I am done buying for today, because %s." % (_label(), st["done_why"]))
+                return
+            broker.place(sym, "buy", size)
+            if st.get("day") != today:
+                st["leftover"] = sorted(set(st.get("leftover", [])) | (set(st.get("bought", [])) - set(st.get("flattened", []))))
+                st["day"], st["count"], st["bought"], st["stops"], st["flattened"], st["plans"] = today, 0, [], {}, [], {}
+            st["count"] = st.get("count", 0) + 1
+            st["bought"] = sorted(set(st.get("bought", [])) | {sym})
+            st.setdefault("plans", {})[sym] = dict(plan, rule=name)
+            _save(st)
+            push("autopilot", "Autopilot, %s: I bought %s for about $%.2f because %s. Stop $%.2f, target $%.2f. Rule: %s. Not a prediction." % (
+                _label(), sym, size, plan["why"], plan["stop"], plan["target"], coach.describe(name, params)))
+            traded.add(sym)
+    except Exception as e:  # noqa: BLE001
+        push("alert", "Autopilot's scan hit a problem: %s. It did nothing else." % str(e)[:140])
+
+
+def take_profits(positions, push):
+    """Sell a position autopilot bought once it reaches its planned target."""
+    st = _load()
+    if st.get("day") != datetime.date.today().isoformat():
+        return
+    plans = st.get("plans") or {}
+    for p in positions:
+        plan = plans.get(p["symbol"])
+        if not plan or p["symbol"] in st.get("flattened", []) or not p.get("qty"):
+            continue
+        price = p["value"] / p["qty"]
+        entry = p.get("entry") or plan["entry"]
+        target = entry + (plan["target"] - plan["entry"])
+        if price >= target:
+            try:
+                broker.close_position(p["symbol"])
+                record_close(p, "reached the profit target")
+                st.setdefault("flattened", []).append(p["symbol"])
+                _save(st)
+                push("autopilot", "Autopilot, %s: %s reached its target, so I sold it. About +$%.2f." % (_label(), p["symbol"], p["pl"]))
+            except Exception as e:  # noqa: BLE001
+                push("alert", "Autopilot tried to take profit on %s but failed: %s." % (p["symbol"], str(e)[:100]))

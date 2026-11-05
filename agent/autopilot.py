@@ -475,6 +475,10 @@ def scan_tick(push, now=None):
         today = now.date().isoformat()
         traded = set(st.get("bought", [])) if st.get("day") == today else set()
         syms = coach.universe()
+        if (params or {}).get("trend") == "12-1":
+            syms = _trend_filter(syms, now)
+            if not syms:
+                return
         bars = _today_bars(syms, now)
         prevs = _prev_day(syms, now)
         held_swing = swing.symbols()
@@ -531,3 +535,16 @@ def take_profits(positions, push):
                 push("autopilot", "Autopilot, %s: %s reached its target, so I sold it. About +$%.2f." % (_label(), p["symbol"], p["pl"]))
             except Exception as e:  # noqa: BLE001
                 push("alert", "Autopilot tried to take profit on %s but failed: %s." % (p["symbol"], str(e)[:100]))
+
+
+_trend = {"day": None, "allowed": None}
+
+
+def _trend_filter(symbols, now):
+    """Today's stock list cut to the top half by 12 minus 1 momentum (over a year of daily closes, fetched once a day)."""
+    import strategies
+    day = now.date().isoformat()
+    if _trend["day"] != day:
+        closes = {s: [(r["t"], r["c"]) for r in rows] for s, rows in broker.bars(symbols, 400).items()}
+        _trend.update(day=day, allowed=strategies.trend_allowed(closes, day, symbols))
+    return [s for s in symbols if _trend["allowed"] is None or s in _trend["allowed"]]

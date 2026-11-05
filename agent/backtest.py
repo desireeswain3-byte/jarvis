@@ -28,7 +28,7 @@ def _limits():
             "max_order": broker.max_order(), "daily_loss": lim["daily_loss"], "daily_loss_pct": lim["daily_loss_pct"], "daily_goal": lim["daily_goal"]}
 
 
-def simulate_day(day_bars, prevs, name, params, equity, lim):
+def simulate_day(day_bars, prevs, name, params, equity, lim, allowed=None):
     """day_bars: {symbol: [bars oldest first, t in New York time]}. Returns (trades, equity at the end)."""
     times = sorted({b["t"] for bars in day_bars.values() for b in bars})
     idx = {s: {b["t"]: i for i, b in enumerate(bars)} for s, bars in day_bars.items()}
@@ -85,7 +85,7 @@ def simulate_day(day_bars, prevs, name, params, equity, lim):
         # 4. new signals at this bar's close
         for sym, bars in day_bars.items():
             i = idx[sym].get(t)
-            if i is None or sym in traded or sym in open_pos or sym in pending:
+            if i is None or sym in traded or sym in open_pos or sym in pending or (allowed is not None and sym not in allowed):
                 continue
             if len(open_pos) + len(pending) >= lim["max_positions"] or len(traded) >= lim["max_trades"]:
                 break
@@ -103,8 +103,12 @@ def run(data, name, params=None, start_equity=200.0, lim=None):
     """data: {"days": [{"date", "bars": {sym: [...]}, "prev": {sym: {h,l,c,v}}}]} oldest first."""
     lim = lim or _limits()
     equity, all_trades, curve = start_equity, [], []
+    trend = (params or {}).get("trend") == "12-1"
     for d in data["days"]:
-        tr, equity = simulate_day(d["bars"], d["prev"], name, params, equity, lim)
+        allowed = None
+        if trend:
+            allowed = strategies.trend_allowed(data.get("daily", {}), d["date"], list(d["bars"]))   # not enough history: no filter, same as live
+        tr, equity = simulate_day(d["bars"], d["prev"], name, params, equity, lim, allowed)
         for x in tr:
             x["date"] = d["date"]
         all_trades += tr
@@ -146,7 +150,7 @@ def fetch(symbols, days=40, cache_dir=None):
     import memory
     cache = Path(cache_dir) if cache_dir else memory.MEM / "backtest_cache"
     cache.mkdir(parents=True, exist_ok=True)
-    key = cache / ("%s-%d-%s.json" % (datetime.date.today().isoformat(), days, abs(hash(",".join(sorted(symbols)))) % 10**8))
+    key = cache / ("v2-%s-%d-%s.json" % (datetime.date.today().isoformat(), days, abs(hash(",".join(sorted(symbols)))) % 10**8))
     if key.exists():
         return _load(key)
     syms = sorted({s.upper() for s in symbols})
@@ -167,7 +171,9 @@ def fetch(symbols, days=40, cache_dir=None):
             time.sleep(0.35)       # stay well under the free data limit
         return {s: _parse(r) for s, r in got.items()}
 
-    m5, d1 = pull("5Min"), pull("1Day")
+    m5 = pull("5Min")
+    start = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=int(days * 1.6) + 400)).strftime("%Y-%m-%dT00:00:00Z")
+    d1 = pull("1Day")      # over a year of daily closes, for the 12 minus 1 momentum filter
     data = build(m5, d1, days)
     try:
         key.write_text(json.dumps(data, default=str), encoding="utf-8")
@@ -194,7 +200,8 @@ def build(m5, d1, days):
                 p = before[-1]
                 prev[s] = {"h": p["h"], "l": p["l"], "c": p["c"], "v": p["v"]}
         out.append({"date": day, "bars": {s: sorted(v, key=lambda b: b["t"]) for s, v in by_day[day].items()}, "prev": prev})
-    return {"days": out}
+    closes = {s: [(b["t"].date().isoformat(), b["c"]) for b in bars] for s, bars in daily.items()}
+    return {"days": out, "daily": closes}
 
 
 def _load(path):
@@ -210,4 +217,4 @@ def split(data, frac=0.7):
     """First part to choose a rule, last part to check it still worked on days it was not chosen on."""
     n = len(data["days"])
     k = max(1, int(n * frac))
-    return {"days": data["days"][:k]}, {"days": data["days"][k:]}
+    return {"days": data["days"][:k], "daily": data.get("daily", {})}, {"days": data["days"][k:], "daily": data.get("daily", {})}

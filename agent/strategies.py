@@ -138,3 +138,29 @@ def signal(name, bars5, prev, params=None):
     if end < FIRST_ENTRY.get(name, datetime.time(9, 45)) or end > LAST_ENTRY:
         return None
     return RULES[name](bars5, prev, params_for(name, params))
+
+
+# ---------------- 12 minus 1 momentum filter (freeCodeCamp course) ----------------
+# A rule's params can include "trend": "12-1". Then it only trades stocks in the top half of the day's stock list
+# ranked by their return from 12 months ago to 1 month ago (skipping the latest month). Slow, long term trend.
+LOOKBACK, SKIP, TOP = 252, 21, 0.5
+
+
+def trend_scores(closes_by_sym, asof):
+    """closes_by_sym: {sym: [(date iso, close), ...] oldest first}. Uses only closes before `asof`.
+    Score = close 21 trading days ago / close 252 trading days ago - 1. Symbols without a year of history are left out."""
+    out = {}
+    for sym, rows in closes_by_sym.items():
+        past = [c for d, c in rows if d < asof]
+        if len(past) > LOOKBACK and past[-LOOKBACK - 1] > 0:
+            out[sym] = past[-SKIP - 1] / past[-LOOKBACK - 1] - 1
+    return out
+
+
+def trend_allowed(closes_by_sym, asof, symbols, top=TOP):
+    """The symbols (out of `symbols`) in the top part by 12 minus 1 momentum, or None if there is not enough history."""
+    sc = trend_scores({s: closes_by_sym.get(s, []) for s in symbols}, asof)
+    if len(sc) < 5:
+        return None
+    ranked = sorted(sc, key=sc.get, reverse=True)
+    return set(ranked[:max(1, int(round(len(ranked) * top)))])

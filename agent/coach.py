@@ -22,9 +22,9 @@ BUSY = threading.Lock()
 FALLBACK = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "AMZN", "META", "GOOGL", "NFLX", "AVGO", "PLTR", "SOFI", "INTC", "MU", "SMCI", "COIN",
             "MARA", "RIOT", "HOOD", "UBER", "SHOP", "BABA", "NIO", "F", "BAC", "JPM", "XOM", "PFE", "T", "DIS", "NKE", "WMT", "COST", "ORCL",
             "CRM", "PYPL", "SNAP", "RIVN", "LCID", "ARM", "MSTR", "CVNA", "DKNG", "RBLX", "AFRM", "UPST", "ROKU", "SQ", "CCL", "AAL"]
-GRID = {"momentum": [{}, {"min_move": 3.0}, {"target_r": 1.5}],
-        "orb15": [{}, {"target_r": 1.5}, {"target_r": 3.0}, {"vol_mult": 1.5}],
-        "engulf": [{}, {"target_r": 1.5}, {"target_r": 3.0}, {"vol_mult": 1.5}]}
+GRID = {"momentum": [{}, {"min_move": 3.0}, {"target_r": 1.5}, {"trend": "12-1"}],
+        "orb15": [{}, {"target_r": 1.5}, {"target_r": 3.0}, {"vol_mult": 1.5}, {"trend": "12-1"}, {"target_r": 3.0, "trend": "12-1"}],
+        "engulf": [{}, {"target_r": 1.5}, {"target_r": 3.0}, {"vol_mult": 1.5}, {"trend": "12-1"}, {"target_r": 3.0, "trend": "12-1"}]}
 MIN_TRADES = 20
 
 
@@ -57,6 +57,8 @@ def describe(name, params):
         extra.append("up %g%%" % p["min_move"])
     if p.get("vol_mult") != d.get("vol_mult") and "vol_mult" in p:
         extra.append("volume %gx" % p["vol_mult"])
+    if (params or {}).get("trend") == "12-1":
+        extra.append("only stocks with strong 12 minus 1 momentum")
     return "%s, target %gR%s" % (strategies.LABELS[name], p.get("target_r", 2), (", " + ", ".join(extra)) if extra else "")
 
 
@@ -122,7 +124,7 @@ def weekly(push, days=40):
             return "I could not get enough past prices to test properly. I will try again later."
         rows, best = evaluate(data)
         name, params = current()
-        cur = next((r for r in rows if r["name"] == name and strategies.params_for(name, r["params"]) == strategies.params_for(name, params)), None)
+        cur = next((r for r in rows if r["name"] == name and r["params"] == (params or {})), None)
         if cur is None:
             cur = {"whole": backtest.run(data, name, params)}
         cfg = load()
@@ -130,7 +132,7 @@ def weekly(push, days=40):
                             "table": [{"rule": describe(r["name"], r["params"]), "name": r["name"], "params": r["params"], "whole": {k: r["whole"][k] for k in ("trades", "win_rate", "total", "expectancy", "max_drawdown", "trades_per_day")},
                                        "held_up": r["first"]["expectancy"] > 0 and r["last"]["expectancy"] > 0} for r in rows],
                             "current": {"rule": describe(name, params), **{k: cur["whole"][k] for k in ("trades", "win_rate", "total", "expectancy", "max_drawdown", "trades_per_day")}}}
-        better = best and (best["name"] != name or strategies.params_for(best["name"], best["params"]) != strategies.params_for(name, params)) and \
+        better = best and (best["name"] != name or best["params"] != (params or {})) and \
             best["whole"]["expectancy"] > cur["whole"]["expectancy"] + 0.02
         if better:
             cfg["proposal"] = {"name": best["name"], "params": best["params"], "made": time.strftime("%Y-%m-%d"),
